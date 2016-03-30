@@ -1,60 +1,64 @@
 #include <gtk/gtk.h>
-
-static void callbackTest( GtkWidget *widget,
-                   gpointer   data )
-{
-    g_print ("Window Closing\n");
+static void printMenuActivatedData(GtkWidget *widget,gpointer data){
+  g_print("\n%s was activated.\n",(gchar *)data);
 }
 
-static gboolean delete_event( GtkWidget *widget,
-                              GdkEvent  *event,
-                              gpointer   data )
-{
-    g_print ("delete event occurred\n");
+int main(int argc,char *argv[]){
+	GtkBuilder *task_manager_ui;
+	GObject *window,*menubar,*menu_file,*menu_view,*menu_options,*menu_help;
+	GObject *file_run,*file_exit;
+	GObject *options_ontop,*options_minclose,*options_color;
+	GObject *view_refreshnow,*view_refreshspeed;
+	GObject *help_about;
 
-    return TRUE;
-}
+	gtk_init(&argc,&argv);
 
-static void destroy( GtkWidget *widget,
-                     gpointer   data )
-{
-    gtk_main_quit ();
-}
+	task_manager_ui=gtk_builder_new();
+	gtk_builder_add_from_file(task_manager_ui,"task-manager-ui.ui",NULL);
 
-int main( int   argc,
-          char *argv[] )
-{
-    GtkWidget *window;
-    GtkWidget *button;
-    
-    gtk_init (&argc, &argv);
-    
-    window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-    
-    g_signal_connect (window, "delete-event",
-		      G_CALLBACK (delete_event), NULL);
-    
-    g_signal_connect (window, "destroy",
-		      G_CALLBACK (destroy), NULL);
-    
-    gtk_container_set_border_width (GTK_CONTAINER (window), 10);
-    
-    button = gtk_button_new_with_label ("Close Window");
-    
-    g_signal_connect (button, "clicked",
-		      G_CALLBACK (callbackTest), NULL);
-    
-    g_signal_connect_swapped (button, "clicked",
-			      G_CALLBACK (gtk_widget_destroy),
-                              window);
-    
-    gtk_container_add (GTK_CONTAINER (window), button);
-    
-    gtk_widget_show (button);
-    
-    gtk_widget_show (window);
-    
-    gtk_main ();
-    
-    return 0;
+	window = gtk_builder_get_object(task_manager_ui,"task-manager-window");
+	g_signal_connect(window,"destroy",G_CALLBACK(gtk_main_quit),NULL);
+
+	menubar=gtk_builder_get_object(task_manager_ui,"menubar");
+	
+	menu_file=gtk_builder_get_object(task_manager_ui,"menuitem-file");
+	g_signal_connect(menu_file,"activate",G_CALLBACK(printMenuActivatedData),"Menu-File");
+
+	menu_view=gtk_builder_get_object(task_manager_ui,"menuitem-view");
+	g_signal_connect(menu_view,"activate",G_CALLBACK(printMenuActivatedData),"Menu-View");
+
+	menu_options=gtk_builder_get_object(task_manager_ui,"menuitem-options");
+	g_signal_connect(menu_options,"activate",G_CALLBACK(printMenuActivatedData),"Menu-Options");
+
+	menu_help=gtk_builder_get_object(task_manager_ui,"menuitem-help");
+	g_signal_connect(menu_help,"activate",G_CALLBACK(printMenuActivatedData),"Menu-Help");
+
+	file_run=gtk_builder_get_object(task_manager_ui,"menu-file-run");
+	g_signal_connect(file_run,"activate",G_CALLBACK(printMenuActivatedData),"File-Run");
+
+	file_exit=gtk_builder_get_object(task_manager_ui,"menu-file-exit");
+	g_signal_connect(file_run,"activate",G_CALLBACK(printMenuActivatedData),"File-Run");
+
+	options_ontop=gtk_builder_get_object(task_manager_ui,"menu-options-ontop");
+	g_signal_connect(options_ontop,"activate",G_CALLBACK(printMenuActivatedData),"Options-OnTop");
+
+	options_minclose=gtk_builder_get_object(task_manager_ui,"menu-options-minclose");
+	g_signal_connect(options_minclose,"activate",G_CALLBACK(printMenuActivatedData),"Options-MinClose");
+
+	options_color=gtk_builder_get_object(task_manager_ui,"menu-options-color");
+	g_signal_connect(options_color,"activate",G_CALLBACK(printMenuActivatedData),"Options-Color");
+
+	view_refreshnow=gtk_builder_get_object(task_manager_ui,"menu-view-refreshnow");
+	g_signal_connect(view_refreshnow,"activate",G_CALLBACK(printMenuActivatedData),"View-Refresh-Now");
+
+	view_refreshspeed=gtk_builder_get_object(task_manager_ui,"menu-view-refreshspeed");
+	g_signal_connect(view_refreshspeed,"activate",G_CALLBACK(printMenuActivatedData),"View-Refresh-Speed");
+
+	help_about=gtk_builder_get_object(task_manager_ui,"menu-help-about");
+	g_signal_connect(help_about,"activate",G_CALLBACK(printMenuActivatedData),"Help-About");
+
+	gtk_widget_show_all(window);
+	gtk_main();
+
+	return 0;
 }
