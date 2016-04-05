@@ -1,3 +1,9 @@
+/*
+TO COMPILE :
+	 gcc <filename>.c -o <filename> `pkg-config --cflags --libs gtk+-3.0`
+
+*/
+
 #include <gtk/gtk.h>
 static void printMenuActivatedData(GtkWidget *widget,gpointer data){
   g_print("\n%s was activated.\n",(gchar *)data);
@@ -16,7 +22,7 @@ int main(int argc,char *argv[]){
 	task_manager_ui=gtk_builder_new();
 	gtk_builder_add_from_file(task_manager_ui,"task-manager-ui.ui",NULL);
 
-	window = gtk_builder_get_object(task_manager_ui,"task-manager-window");
+	window = gtk_builder_get_object(task_manager_ui,"task-manager");
 	g_signal_connect(window,"destroy",G_CALLBACK(gtk_main_quit),NULL);
 
 	menubar=gtk_builder_get_object(task_manager_ui,"menubar");
