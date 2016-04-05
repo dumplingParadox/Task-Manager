@@ -198,7 +198,7 @@
                     <property name="can_focus">False</property>
                     <property name="label" translatable="yes">Processes</property>
                     <property name="justify">center</property>
-                    <property name="selectable">True</property>
+                    <property name="selectable">False</property>
                   </object>
                   <packing>
                     <property name="tab_fill">False</property>
@@ -231,7 +231,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="label" translatable="yes">Performance</property>
-                    <property name="selectable">True</property>
+                    <property name="selectable">False</property>
                   </object>
                   <packing>
                     <property name="position">1</property>
@@ -265,7 +265,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="label" translatable="yes">Users</property>
-                    <property name="selectable">True</property>
+                    <property name="selectable">False</property>
                   </object>
                   <packing>
                     <property name="position">2</property>
