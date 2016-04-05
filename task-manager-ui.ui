@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
-  <object class="GtkWindow" id="task-manager-window">
+  <!-- interface-requires gtk+ 3.0 -->
+  <object class="GtkWindow" id="task-manager">
+    <property name="width_request">600</property>
+    <property name="height_request">700</property>
     <property name="can_focus">False</property>
     <property name="title" translatable="yes">Task Manager</property>
     <property name="resizable">False</property>
@@ -9,137 +12,168 @@
     <property name="default_height">700</property>
     <property name="has_resize_grip">False</property>
     <child>
-      <object class="GtkMenuBar" id="menubar">
+      <object class="GtkBox" id="box3">
         <property name="width_request">600</property>
-        <property name="height_request">20</property>
+        <property name="height_request">700</property>
         <property name="visible">True</property>
         <property name="can_focus">False</property>
-        <property name="valign">start</property>
+        <property name="orientation">vertical</property>
         <child>
-          <object class="GtkMenuItem" id="menuitem-file">
+          <object class="GtkMenuBar" id="menubar">
+            <property name="width_request">600</property>
+            <property name="height_request">20</property>
             <property name="visible">True</property>
             <property name="can_focus">False</property>
-            <property name="label" translatable="yes">_File</property>
-            <property name="use_underline">True</property>
-            <child type="submenu">
-              <object class="GtkMenu" id="menu-file">
+            <property name="valign">start</property>
+            <child>
+              <object class="GtkMenuItem" id="menuitem-file">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
-                <child>
-                  <object class="GtkMenuItem" id="menu-file-run">
+                <property name="label" translatable="yes">_File</property>
+                <property name="use_underline">True</property>
+                <child type="submenu">
+                  <object class="GtkMenu" id="menu-file">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">_Run New Task</property>
-                    <property name="use_underline">True</property>
+                    <child>
+                      <object class="GtkMenuItem" id="menu-file-run">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="label" translatable="yes">_Run New Task</property>
+                        <property name="use_underline">True</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkSeparatorMenuItem" id="menu-file-separator">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuItem" id="menu-file-exit">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="label" translatable="yes">E_xit</property>
+                        <property name="use_underline">True</property>
+                      </object>
+                    </child>
                   </object>
                 </child>
-                <child>
-                  <object class="GtkSeparatorMenuItem" id="menu-file-separator">
+              </object>
+            </child>
+            <child>
+              <object class="GtkMenuItem" id="menuitem-options">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">_Options</property>
+                <property name="use_underline">True</property>
+                <child type="submenu">
+                  <object class="GtkMenu" id="menu-options">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
+                    <child>
+                      <object class="GtkMenuItem" id="menu-options-ontop">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="label" translatable="yes">_Always On Top</property>
+                        <property name="use_underline">True</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuItem" id="menu-options-minclose">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="label" translatable="yes">_Minimise On Close</property>
+                        <property name="use_underline">True</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuItem" id="menu-options-color">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="label" translatable="yes">Choose _Color</property>
+                        <property name="use_underline">True</property>
+                      </object>
+                    </child>
                   </object>
                 </child>
-                <child>
-                  <object class="GtkMenuItem" id="menu-file-exit">
+              </object>
+            </child>
+            <child>
+              <object class="GtkMenuItem" id="menuitem-view">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">_View</property>
+                <property name="use_underline">True</property>
+                <child type="submenu">
+                  <object class="GtkMenu" id="menu-view">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">E_xit</property>
-                    <property name="use_underline">True</property>
+                    <child>
+                      <object class="GtkMenuItem" id="menu-view-refreshnow">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="label" translatable="yes">Refresh _Now</property>
+                        <property name="use_underline">True</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuItem" id="menu-view-refreshspeed">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="label" translatable="yes">Refresh _Speed</property>
+                        <property name="use_underline">True</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkMenuItem" id="menuitem-help">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">_Help</property>
+                <property name="use_underline">True</property>
+                <child type="submenu">
+                  <object class="GtkMenu" id="menu-help">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <child>
+                      <object class="GtkMenuItem" id="menu-help-about">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="label" translatable="yes">_About</property>
+                        <property name="use_underline">True</property>
+                      </object>
+                    </child>
                   </object>
                 </child>
               </object>
             </child>
           </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">0</property>
+          </packing>
         </child>
         <child>
-          <object class="GtkMenuItem" id="menuitem-options">
+          <object class="GtkBox" id="box4">
+            <property name="width_request">600</property>
+            <property name="height_request">660</property>
             <property name="visible">True</property>
             <property name="can_focus">False</property>
-            <property name="label" translatable="yes">_Options</property>
-            <property name="use_underline">True</property>
-            <child type="submenu">
-              <object class="GtkMenu" id="menu-options">
-                <property name="visible">True</property>
-                <property name="can_focus">False</property>
-                <child>
-                  <object class="GtkMenuItem" id="menu-options-ontop">
-                    <property name="visible">True</property>
-                    <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">_Always On Top</property>
-                    <property name="use_underline">True</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkMenuItem" id="menu-options-minclose">
-                    <property name="visible">True</property>
-                    <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">_Minimise On Close</property>
-                    <property name="use_underline">True</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkMenuItem" id="menu-options-color">
-                    <property name="visible">True</property>
-                    <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">Choose _Color</property>
-                    <property name="use_underline">True</property>
-                  </object>
-                </child>
-              </object>
+            <property name="orientation">vertical</property>
+            <child>
+              <placeholder/>
             </child>
           </object>
-        </child>
-        <child>
-          <object class="GtkMenuItem" id="menuitem-view">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="label" translatable="yes">_View</property>
-            <property name="use_underline">True</property>
-            <child type="submenu">
-              <object class="GtkMenu" id="menu-view">
-                <property name="visible">True</property>
-                <property name="can_focus">False</property>
-                <child>
-                  <object class="GtkMenuItem" id="menu-view-refreshnow">
-                    <property name="visible">True</property>
-                    <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">Refresh _Now</property>
-                    <property name="use_underline">True</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkMenuItem" id="menu-view-refreshspeed">
-                    <property name="visible">True</property>
-                    <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">Refresh _Speed</property>
-                    <property name="use_underline">True</property>
-                  </object>
-                </child>
-              </object>
-            </child>
-          </object>
-        </child>
-        <child>
-          <object class="GtkMenuItem" id="menuitem-help">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="label" translatable="yes">_Help</property>
-            <property name="use_underline">True</property>
-            <child type="submenu">
-              <object class="GtkMenu" id="menu-help">
-                <property name="visible">True</property>
-                <property name="can_focus">False</property>
-                <child>
-                  <object class="GtkMenuItem" id="menu-help-about">
-                    <property name="visible">True</property>
-                    <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">_About</property>
-                    <property name="use_underline">True</property>
-                  </object>
-                </child>
-              </object>
-            </child>
-          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
         </child>
       </object>
     </child>
