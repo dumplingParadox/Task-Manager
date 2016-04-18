@@ -37,6 +37,14 @@
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <child>
+                      <object class="GtkMenuItem" id="menu-file-new">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="label" translatable="yes">_New Connection</property>
+                        <property name="use_underline">True</property>
+                      </object>
+                    </child>
+                    <child>
                       <object class="GtkMenuItem" id="menu-file-run">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
@@ -367,7 +375,6 @@
                                         <attributes>
                                           <attribute name="font-desc" value="Yu Gothic Medium, Bold 12"/>
                                           <attribute name="weight" value="ultraheavy"/>
-                                          <attribute name="size" value="100"/>
                                         </attributes>
                                       </object>
                                       <packing>
@@ -442,7 +449,6 @@
                                         <attributes>
                                           <attribute name="font-desc" value="Yu Gothic Medium, Bold 12"/>
                                           <attribute name="weight" value="ultraheavy"/>
-                                          <attribute name="size" value="100"/>
                                         </attributes>
                                       </object>
                                       <packing>
