@@ -365,7 +365,7 @@
                                     <property name="orientation">vertical</property>
                                     <property name="homogeneous">True</property>
                                     <child>
-                                      <object class="GtkLabel" id="label7">
+                                      <object class="GtkLabel" id="cpu-usage-label">
                                         <property name="visible">True</property>
                                         <property name="can_focus">False</property>
                                         <property name="xalign">0.93000000715255737</property>
@@ -439,7 +439,7 @@
                                     <property name="orientation">vertical</property>
                                     <property name="homogeneous">True</property>
                                     <child>
-                                      <object class="GtkLabel" id="label6">
+                                      <object class="GtkLabel" id="mem-usage-label">
                                         <property name="visible">True</property>
                                         <property name="can_focus">False</property>
                                         <property name="xalign">0.93000000715255737</property>

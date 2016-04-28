@@ -33,13 +33,14 @@ TO COMPILE :
 	GObject *options_ontop,*options_minclose,*options_color;
 	GObject *view_refreshnow,*view_refreshspeed;
 	GObject *help_about;
+	GtkLabel *cpuusage,*memusage;
 //Variable for Task-Manager ends.
 
 //SOCKET DECLARATIONS
 
-	int sock=-1;
-	char buffer[128];
-	int refreshRate=100;
+	int taskSock=-1,memSock=-1,cpuSock=-1,runSock=-1;
+	char taskBuffer[128],memBuffer[128],cpuBuffer[128],runBuffer[128];
+	int refreshRate=10;
 	int refreshStop=0;
 
 //SOCKET DECLARATIONS ENDS
@@ -51,7 +52,7 @@ TO COMPILE :
 
 void Die(char *mess) { perror(mess); return; }
 
-int receiveDataAndCreateTasks(){
+int receiveDataAndCreateTasks(int sock,char *buffer){
 	int received = 0;
 	int bytes=0;
 	char command[50],pid[10],cpu[5],mem[5],user[50];
@@ -64,7 +65,7 @@ int receiveDataAndCreateTasks(){
 		received += bytes;
 		buffer[bytes] = '\0';        /* Assure null terminated string */
 		sscanf(buffer,"%s%s%s%s%s",command,pid,cpu,mem,user);
-		
+		printf("Task : %s->%s->%s->%s->%s\n",command,pid,cpu,mem,user);
 		bytes=0;
 		if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
 			Die("Failed to receive bytes from server");
@@ -74,7 +75,32 @@ int receiveDataAndCreateTasks(){
 	return 1;
 }
 
-int sendMessageOverSocket(char *msg){
+int receiveCPUUsage(int sock,char *buffer){
+	int received = 0;
+	int bytes=0;
+	char usage[5];
+	if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
+		Die("Failed to receive bytes from server");
+		return 0;
+	}
+
+	while (strcmp(buffer,"DONE")!=0) {
+		received += bytes;
+		buffer[bytes] = '\0';        /* Assure null terminated string */
+		sscanf(buffer,"%s",usage);
+		printf("CPU Usage : %s\n",usage);
+		bytes=0;
+		if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
+			Die("Failed to receive bytes from server");
+			return 0;
+		}
+	}
+	cpuusage=GTK_WIDGET(gtk_builder_get_object(task_manager_ui,"cpu-usage-label"));
+	gtk_label_set_text(cpuusage, usage);
+	return 1;
+}
+
+int sendMessageOverSocket(int sock,char *msg){
 	if (send(sock, msg, 128, 0) != 128) {
 		Die("Mismatch in number of sent bytes");
 		return 0;
@@ -83,14 +109,40 @@ int sendMessageOverSocket(char *msg){
 	return 1;
 }
 
+int receiveMemUsage(int sock,char *buffer){
+	int received = 0;
+	int bytes=0;
+	char usage[5];
+	if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
+		Die("Failed to receive bytes from server");
+		return 0;
+	}
+
+	while (strcmp(buffer,"DONE")!=0) {
+		received += bytes;
+		buffer[bytes] = '\0';        /* Assure null terminated string */
+		sscanf(buffer,"%s",usage);
+		printf("Memory Usage : %s\n",usage);
+		bytes=0;
+		if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
+			Die("Failed to receive bytes from server");
+			return 0;
+		}
+	}
+	memusage=GTK_WIDGET(gtk_builder_get_object(task_manager_ui,"mem-usage-label"));
+	gtk_label_set_text(memusage, usage);
+	return 1;
+}
+
+
 int setupSocket(char *ip,int port){
 	printf("Setting up socket.\n");
 	struct sockaddr_in echoserver;
             
 	/* Create the TCP socket */
-	if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+	if ((taskSock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0||(cpuSock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0||(memSock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0||(runSock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
 		Die("Failed to create socket");
-		sock=-1;
+		taskSock=runSock=cpuSock=memSock=-1;
 		return 0;
 	}
 
@@ -100,9 +152,9 @@ int setupSocket(char *ip,int port){
 	echoserver.sin_addr.s_addr = inet_addr(ip);  /* IP address */
 	echoserver.sin_port = htons(port);       /* server port */
 	/* Establish connection */
-	if (connect(sock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0) {
+	if (connect(taskSock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0||connect(cpuSock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0||connect(memSock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0||connect(runSock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0) {
 		Die("Failed to connect with server");
-		sock=-1;
+		taskSock=runSock=cpuSock=memSock=-1;
 		return 0;
 	}
 	printf("Socket created succesfully.\n");
@@ -116,10 +168,16 @@ int setupSocket(char *ip,int port){
 //SOCKET ENDS
 
 void shutDown(GtkWidget *widget,gpointer data){
-	strcpy(buffer,"BYE");	
-	sendMessageOverSocket(buffer);
-	close(sock);
-	sock=-1;
+	strcpy(taskBuffer,"BYE");	
+	sendMessageOverSocket(taskSock,taskBuffer);
+	sendMessageOverSocket(cpuSock,taskBuffer);
+	sendMessageOverSocket(memSock,taskBuffer);
+	sendMessageOverSocket(runSock,taskBuffer);
+	close(taskSock);
+	close(cpuSock);
+	close(memSock);
+	close(runSock);
+	taskSock=runSock=cpuSock=memSock=-1;
 	gtk_widget_destroy(task_manager_window);
 	gtk_main_quit();
 }
@@ -180,18 +238,36 @@ struct conDetail{
 };
 
 void threadedSendReceiveTasks(){
-	if(sock==-1||refreshStop)
+	if(taskSock==-1||cpuSock==-1||memSock==-1||runSock==-1||refreshStop)
 		return;
-	sendMessageOverSocket("whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\'");
-	receiveDataAndCreateTasks();
+	sendMessageOverSocket(taskSock,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\'");
+	receiveDataAndCreateTasks(taskSock,taskBuffer);
+}
+
+void threadedSendReceiveCPU(){
+	if(taskSock==-1||cpuSock==-1||memSock==-1||runSock==-1||refreshStop)
+		return;
+	sendMessageOverSocket(cpuSock,"top -bn2 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{print 100-$1\"%\"}\'");
+	receiveCPUUsage(cpuSock,cpuBuffer);
+}
+
+void threadedSendReceiveMem(){
+	if(taskSock==-1||cpuSock==-1||memSock==-1||runSock==-1||refreshStop)
+		return;
+	sendMessageOverSocket(memSock,"free -m | grep Mem | awk \'{printf(\"%0.1f%s\",$3/$2*100,\"%\")}\'");
+	receiveMemUsage(memSock,memBuffer);
 }
 
 void *socketSetupThreadFunction(void *detail){
 	//sleep(5)
 	struct conDetail *det;
 	det=(struct conDetial *) detail;
-	if(sock!=-1)
-		close(sock);
+	if(taskSock!=-1||cpuSock!=-1||memSock!=-1||runSock!=-1){
+		close(taskSock);
+		close(cpuSock);
+		close(memSock);
+		close(runSock);
+	}
 	//gdk_threads_enter ();
 	if(setupSocket(det->ip,atoi(det->port))==0){
 		closeNewConnectionWindow(NULL,loading_connection_window);
@@ -206,11 +282,19 @@ void *socketSetupThreadFunction(void *detail){
 		gtk_entry_set_text(GTK_ENTRY(port_add),det->port);
 		return;
 	}
-	sendMessageOverSocket("whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\'");
-	receiveDataAndCreateTasks();
-	g_timeout_add_seconds(refreshRate,threadedSendReceiveTasks,NULL);
 
 	closeNewConnectionWindow(NULL,loading_connection_window);
+	
+	sendMessageOverSocket(taskSock,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\'");
+	receiveDataAndCreateTasks(taskSock,taskBuffer);
+	sendMessageOverSocket(cpuSock,"top -bn2 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{print 100-$1\"%\"}\'");
+	receiveCPUUsage(cpuSock,cpuBuffer);
+	sendMessageOverSocket(memSock,"free -m | grep Mem | awk \'{printf(\"%0.1f%s\",$3/$2*100,\"%\")}\'");
+	receiveMemUsage(memSock,memBuffer);
+
+	g_timeout_add_seconds(refreshRate,threadedSendReceiveTasks,NULL);
+	g_timeout_add_seconds(refreshRate,threadedSendReceiveCPU,NULL);
+	g_timeout_add_seconds(refreshRate,threadedSendReceiveMem,NULL);
 	//gdk_threads_leave();
 }
 
@@ -289,10 +373,16 @@ static void connectToIp(GtkWidget *widget,GtkBuilder *data){
 		gtk_widget_destroy(new_connection_window);
 		//gtk_widget_queue_draw (new_connection_window);
 		//printf("IP : %s\nPort : %s\n",ip,port);
-		strcpy(buffer,"BYE");	
-		sendMessageOverSocket(buffer);
-		close(sock);
-		sock=-1;
+		strcpy(taskBuffer,"BYE");	
+		sendMessageOverSocket(taskSock,taskBuffer);
+		sendMessageOverSocket(cpuSock,taskBuffer);
+		sendMessageOverSocket(memSock,taskBuffer);
+		sendMessageOverSocket(runSock,taskBuffer);
+		close(taskSock);
+		close(cpuSock);
+		close(memSock);
+		close(runSock);
+		taskSock=runSock=cpuSock=memSock=-1;
 		startConnection(ip,port);
 		//Data Valid, start connection.
 		

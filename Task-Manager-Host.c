@@ -10,7 +10,8 @@
           
 void Die(char *mess) { perror(mess); return; }
 
-void HandleClient(int sock) {
+void handlerTasks(void *socket_desc){
+	int sock = *(int*)socket_desc;
 	char buffer[128];
 	int received = -1;
 	while(1){
@@ -42,7 +43,6 @@ void HandleClient(int sock) {
 	}*/
 
 	while(fgets(buffer,128,fp)!=NULL){
-
 		if (send(sock, buffer, 128, 0) != 128) {
 			Die("Failed to send bytes to client");
 		}
@@ -58,8 +58,153 @@ void HandleClient(int sock) {
 	close(sock);
 }
 
+void handlerCPU(void *socket_desc){
+	int sock = *(int*)socket_desc;
+	char buffer[128];
+	int received = -1;
+	while(1){
+	/* Receive message */
+	if ((received = recv(sock, buffer, 128, 0)) < 0) {
+		Die("Failed to receive initial bytes from client");
+	}
+	//buffer[received]='\0';
+	printf("%s\n",buffer);
+	if(strcmp(buffer,"BYE")==0)
+		break;
+	FILE *fp;	
+	if((fp=popen(buffer,"r"))==NULL){
+					char msg[]="Error opening pipe!\n";
+					send(sock,msg,strlen(msg),0);
+					return;
+				}
+	/* Send bytes and check for more incoming data in loop */
+	/*while (received > 0) {
+		// Send back received data 
+		if (send(sock, buffer, received, 0) != received) {
+			Die("Failed to send bytes to client");
+		}
+
+		// Check for more data 
+		if ((received = recv(sock, buffer, 32, 0)) < 0) {
+			Die("Failed to receive additional bytes from client");
+		}
+	}*/
+
+	while(fgets(buffer,128,fp)!=NULL){
+		if (send(sock, buffer, 128, 0) != 128) {
+			Die("Failed to send bytes to client");
+		}
+
+	}	
+	strcpy(buffer,"DONE");
+	if (send(sock, buffer, 128, 0) != 128){
+		Die("Failed to send bytes to client");
+	}
+	sleep(1);
+	}
+	printf("Disconnected.\n");
+	close(sock);
+}
+
+void handlerMem(void *socket_desc){
+	int sock = *(int*)socket_desc;
+	char buffer[128];
+	int received = -1;
+	while(1){
+	/* Receive message */
+	if ((received = recv(sock, buffer, 128, 0)) < 0) {
+		Die("Failed to receive initial bytes from client");
+	}
+	//buffer[received]='\0';
+	printf("%s\n",buffer);
+	if(strcmp(buffer,"BYE")==0)
+		break;
+	FILE *fp;	
+	if((fp=popen(buffer,"r"))==NULL){
+					char msg[]="Error opening pipe!\n";
+					send(sock,msg,strlen(msg),0);
+					return;
+				}
+	/* Send bytes and check for more incoming data in loop */
+	/*while (received > 0) {
+		// Send back received data 
+		if (send(sock, buffer, received, 0) != received) {
+			Die("Failed to send bytes to client");
+		}
+
+		// Check for more data 
+		if ((received = recv(sock, buffer, 32, 0)) < 0) {
+			Die("Failed to receive additional bytes from client");
+		}
+	}*/
+
+	while(fgets(buffer,128,fp)!=NULL){
+		if (send(sock, buffer, 128, 0) != 128) {
+			Die("Failed to send bytes to client");
+		}
+
+	}	
+	strcpy(buffer,"DONE");
+	if (send(sock, buffer, 128, 0) != 128){
+		Die("Failed to send bytes to client");
+	}
+	sleep(1);
+	}
+	printf("Disconnected.\n");
+	close(sock);
+}
+
+void handlerRun(void *socket_desc){
+	int sock = *(int*)socket_desc;
+	char buffer[128];
+	int received = -1;
+	while(1){
+	/* Receive message */
+	if ((received = recv(sock, buffer, 128, 0)) < 0) {
+		Die("Failed to receive initial bytes from client");
+	}
+	//buffer[received]='\0';
+	printf("%s\n",buffer);
+	if(strcmp(buffer,"BYE")==0)
+		break;
+	FILE *fp;	
+	if((fp=popen(buffer,"r"))==NULL){
+					char msg[]="Error opening pipe!\n";
+					send(sock,msg,strlen(msg),0);
+					return;
+				}
+	/* Send bytes and check for more incoming data in loop */
+	/*while (received > 0) {
+		// Send back received data 
+		if (send(sock, buffer, received, 0) != received) {
+			Die("Failed to send bytes to client");
+		}
+
+		// Check for more data 
+		if ((received = recv(sock, buffer, 32, 0)) < 0) {
+			Die("Failed to receive additional bytes from client");
+		}
+	}*/
+
+	while(fgets(buffer,128,fp)!=NULL){
+		if (send(sock, buffer, 128, 0) != 128) {
+			Die("Failed to send bytes to client");
+		}
+
+	}	
+	strcpy(buffer,"DONE");
+	if (send(sock, buffer, 128, 0) != 128){
+		Die("Failed to send bytes to client");
+	}
+	sleep(1);
+	}
+	printf("Disconnected.\n");
+	close(sock);
+}
+
+
 int main(int argc, char *argv[]) {
-	int serversock, clientsock;
+	int serversock, clientsock,*new_sock,sockCount=0;
 	struct sockaddr_in echoserver, echoclient;
 	int port=8796;
 	/* Create the TCP socket */
@@ -82,15 +227,28 @@ int main(int argc, char *argv[]) {
 	if (listen(serversock, MAXPENDING) < 0) {
 		Die("Failed to listen on server socket");
 	}
-
+	pthread_t sniffer_thread[4];
 	/* Run until cancelled */
-	while (1) {
+	while (sockCount<5) {
 		unsigned int clientlen = sizeof(echoclient);
 		/* Wait for client connection */
 		if ((clientsock = accept(serversock, (struct sockaddr *) &echoclient,&clientlen)) < 0) {
 			Die("Failed to accept client connection");
+			break;
 		}
+		new_sock = malloc(1);
+		*new_sock = clientsock;
+		if(pthread_create( &sniffer_thread[sockCount] , NULL ,  handlerTasks , (void*) new_sock) < 0){
+			perror("could not create thread");
+            		return 1;
+        	}
+		//pthread_join( sniffer_thread , NULL);
 		fprintf(stdout, "Client connected: %s\n",inet_ntoa(echoclient.sin_addr));
-		HandleClient(clientsock);
+		//HandleClient(clientsock);
 	}
+	pthread_join( sniffer_thread[0] , NULL);
+	pthread_join( sniffer_thread[1] , NULL);
+	pthread_join( sniffer_thread[2] , NULL);
+	pthread_join( sniffer_thread[3] , NULL);
+
 }
