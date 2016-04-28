@@ -1,6 +1,6 @@
 /*
 TO COMPILE :
-	 gcc Task-Manager.c -o Task-Manager `pkg-config --cflags --libs gtk+-3.0`
+	 gcc Task-Manager.c -o Task-Manager `pkg-config --cflags --libs gtk+-3.0 gthread-2.0` -w
 
 */
 
@@ -12,6 +12,7 @@ TO COMPILE :
 #include<string.h>
 #include<unistd.h>
 #include<netinet/in.h>
+#include<pthread.h>
 
 //GLOBAL DECLARATIONS.
 
@@ -34,6 +35,15 @@ TO COMPILE :
 	GObject *help_about;
 //Variable for Task-Manager ends.
 
+//SOCKET DECLARATIONS
+
+	int sock=-1;
+	char buffer[128];
+	int refreshRate=100;
+	int refreshStop=0;
+
+//SOCKET DECLARATIONS ENDS
+
 //GLOBAL DECLARATIONS ENDS.
 
 
@@ -41,17 +51,47 @@ TO COMPILE :
 
 void Die(char *mess) { perror(mess); return; }
 
-void setupSocket(char *ip,int port){
-	printf("Setting up socket.\n");
-	int sock;
-	struct sockaddr_in echoserver;
-	char buffer[128]="0";
-	unsigned int echolen;
+int receiveDataAndCreateTasks(){
 	int received = 0;
+	int bytes=0;
+	char command[50],pid[10],cpu[5],mem[5],user[50];
+	if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
+		Die("Failed to receive bytes from server");
+		return 0;
+	}
+
+	while (strcmp(buffer,"DONE")!=0) {
+		received += bytes;
+		buffer[bytes] = '\0';        /* Assure null terminated string */
+		sscanf(buffer,"%s%s%s%s%s",command,pid,cpu,mem,user);
+		
+		bytes=0;
+		if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
+			Die("Failed to receive bytes from server");
+			return 0;
+		}
+	}
+	return 1;
+}
+
+int sendMessageOverSocket(char *msg){
+	if (send(sock, msg, 128, 0) != 128) {
+		Die("Mismatch in number of sent bytes");
+		return 0;
+	}
+	
+	return 1;
+}
+
+int setupSocket(char *ip,int port){
+	printf("Setting up socket.\n");
+	struct sockaddr_in echoserver;
             
 	/* Create the TCP socket */
 	if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
 		Die("Failed to create socket");
+		sock=-1;
+		return 0;
 	}
 
 	/* Construct the server sockaddr_in structure */
@@ -62,40 +102,27 @@ void setupSocket(char *ip,int port){
 	/* Establish connection */
 	if (connect(sock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0) {
 		Die("Failed to connect with server");
-		return;
+		sock=-1;
+		return 0;
 	}
+	printf("Socket created succesfully.\n");
+	return 1;
 
-	/* Send the word to the server */
-	strcpy(buffer,"whoami | xargs top -b -n 1 -o -COMMAND -u | awk \'{printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\'");
-
-	//01 COMMANDS [ Get tasks ] : whoami | xargs top -b -n 1 -o -COMMAND -u | awk '{if(NR>7)printf "%-s %6s %-4s %-4s %-4s\n",$NF,$1,$9,$10,$2}'
+	//01 COMMANDS [ Get tasks ] : whoami | xargs top -b -n 1 -u | awk '{if(NR>7)printf "%-s %6s %-4s %-4s %-4s\n",$NF,$1,$9,$10,$2}'
 	//02 COMMANDS [ Get CPU% Usage ] : top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print $1"%"}'	
 	//03 COMMANDS [ Get Mem% Usage ] : free -m | grep Mem | awk '{printf("%0.1f%s",$3/$2*100,"%")}'
-	
-	if (send(sock, buffer, 128, 0) != 128) {
-		Die("Mismatch in number of sent bytes");
-		return;
-	}
-
-	/* Receive the word back from the server */
-	while (strcmp(buffer,"exit")!=0) {
-		int bytes = 0;
-		if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
-			Die("Failed to receive bytes from server");
-			return;
-		}
-		received += bytes;
-		buffer[bytes] = '\0';        /* Assure null terminated string */
-		fprintf(stdout, buffer);
-		fprintf(stdout, "\n");
-	}
-
-	fprintf(stdout, "\n");
-	close(sock);
-	return;
 }
 
 //SOCKET ENDS
+
+void shutDown(GtkWidget *widget,gpointer data){
+	strcpy(buffer,"BYE");	
+	sendMessageOverSocket(buffer);
+	close(sock);
+	sock=-1;
+	gtk_widget_destroy(task_manager_window);
+	gtk_main_quit();
+}
 
 void closeNewConnectionWindow(GtkWidget *widget,GtkWidget *window){
 	if(window!=NULL)
@@ -123,9 +150,7 @@ int validateIP(char *ip){
 	return 1;
 }
 
-void startConnection(char *ip,int port){
-
-	//printf("IP : %s\nPort : %d\n",ip,port);
+void *loadWindowThreadFunction(){
 	gtk_widget_set_sensitive(task_manager_window,FALSE);
 	loading_connection_window = gtk_dialog_new();
 	GtkWidget *content_area;
@@ -147,17 +172,105 @@ void startConnection(char *ip,int port){
 	gtk_window_set_resizable(GTK_WINDOW(loading_connection_window), FALSE);
 
 	gtk_widget_show_all(loading_connection_window);
+}
 
-	setupSocket(ip,port);
-	
+struct conDetail{
+	char ip[16];
+	char port[8];
+};
+
+void threadedSendReceiveTasks(){
+	if(sock==-1||refreshStop)
+		return;
+	sendMessageOverSocket("whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\'");
+	receiveDataAndCreateTasks();
+}
+
+void *socketSetupThreadFunction(void *detail){
+	//sleep(5)
+	struct conDetail *det;
+	det=(struct conDetial *) detail;
+	if(sock!=-1)
+		close(sock);
+	//gdk_threads_enter ();
+	if(setupSocket(det->ip,atoi(det->port))==0){
+		closeNewConnectionWindow(NULL,loading_connection_window);
+		createNewConnectionWindow(NULL,NULL);
+		GObject *ip_add=gtk_builder_get_object(new_connection_ui,"ip-entry");
+		GObject *port_add=gtk_builder_get_object(new_connection_ui,"port-entry");
+		GdkColor red;
+		gdk_color_parse("red",&red);
+		gtk_widget_modify_fg(GTK_WIDGET(ip_add),GTK_STATE_NORMAL,&red);
+		gtk_widget_modify_fg(GTK_WIDGET(port_add),GTK_STATE_NORMAL,&red);
+		gtk_entry_set_text(GTK_ENTRY(ip_add),det->ip);
+		gtk_entry_set_text(GTK_ENTRY(port_add),det->port);
+		return;
+	}
+	sendMessageOverSocket("whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\'");
+	receiveDataAndCreateTasks();
+	g_timeout_add_seconds(refreshRate,threadedSendReceiveTasks,NULL);
+
 	closeNewConnectionWindow(NULL,loading_connection_window);
+	//gdk_threads_leave();
+}
+
+void startConnection(char *ip,char *port){
+
+	gtk_widget_set_sensitive(task_manager_window,FALSE);
+	loading_connection_window = gtk_dialog_new();
+	GtkWidget *content_area;
+	GtkWidget *box=gtk_builder_get_object(new_connection_ui,"loading-box");
+	
+	loading_connection_cancel=gtk_builder_get_object(new_connection_ui,"loading-cancel-button");
+	g_signal_connect(loading_connection_cancel,"clicked",G_CALLBACK(closeNewConnectionWindow),loading_connection_window);
+
+	loading_connection_spinner=gtk_builder_get_object(new_connection_ui,"loading-spinner");
+	gtk_spinner_start(loading_connection_spinner);
+
+	content_area = gtk_dialog_get_content_area(GTK_DIALOG(loading_connection_window));
+	//gtk_widget_reparent(box,GTK_CONTAINER(content_area));
+	gtk_container_add(GTK_CONTAINER(content_area), box);
+
+	g_signal_connect(loading_connection_window, "destroy", G_CALLBACK(closeNewConnectionWindow),loading_connection_window);
+	gtk_window_set_title(loading_connection_window,"Loading Tasks");
+	gtk_window_set_skip_taskbar_hint(loading_connection_window,TRUE);
+	gtk_window_set_resizable(GTK_WINDOW(loading_connection_window), FALSE);
+
+	gtk_widget_show_all(loading_connection_window);	
+
+	struct conDetail detail;
+	strcpy(detail.ip,ip);
+	strcpy(detail.port,port);
+
+	GThread *startLoadingWindowThread,*startSetupSocketThread;
+	GError *err1 = NULL ;
+	GError *err2 = NULL ;
+
+	/*if((startLoadingWindowThread=g_thread_create((GThreadFunc)loadWindowThreadFunction,NULL,TRUE,&err1))==NULL){
+		printf("Thread create failed: %s\n",err1->message);
+		g_error_free(err1);
+	}*/
+
+	if((startSetupSocketThread=g_thread_create((GThreadFunc)socketSetupThreadFunction,(void *)&detail,TRUE,&err2))==NULL){
+		printf("Thread create failed: %s\n",err2->message);
+		g_error_free(err2) ;
+	}
+
+	//g_thread_join(startLoadingWindowThread);
+	g_thread_join(startSetupSocketThread);
+
+
+	//printf("IP : %s\nPort : %d\n",ip,port);
+
 }
 
 static void connectToIp(GtkWidget *widget,GtkBuilder *data){
 	GObject *ip_add=gtk_builder_get_object(new_connection_ui,"ip-entry");
 	GObject *port_add=gtk_builder_get_object(new_connection_ui,"port-entry");
-	char *ip=gtk_entry_get_text(GTK_ENTRY(ip_add));
-	char *port=gtk_entry_get_text(GTK_ENTRY(port_add));
+	char ip[16];
+	strcpy(ip,gtk_entry_get_text(GTK_ENTRY(ip_add)));
+	char port[8];
+	strcpy(port,gtk_entry_get_text(GTK_ENTRY(port_add)));
 	unsigned prt;
 	int flagIP=0,flagPort=0;
 	unsigned char c;
@@ -173,8 +286,14 @@ static void connectToIp(GtkWidget *widget,GtkBuilder *data){
 	if(flagIP&&flagPort){
 		gtk_widget_modify_fg(GTK_WIDGET(ip_add),GTK_STATE_NORMAL,&green);
 		gtk_widget_modify_fg(GTK_WIDGET(port_add),GTK_STATE_NORMAL,&red);
-		startConnection(ip,prt);
 		gtk_widget_destroy(new_connection_window);
+		//gtk_widget_queue_draw (new_connection_window);
+		//printf("IP : %s\nPort : %s\n",ip,port);
+		strcpy(buffer,"BYE");	
+		sendMessageOverSocket(buffer);
+		close(sock);
+		sock=-1;
+		startConnection(ip,port);
 		//Data Valid, start connection.
 		
 	}else{
@@ -230,6 +349,11 @@ void createNewConnectionWindow(GtkWidget *widget,gpointer data){
 
 int main(int argc,char *argv[]){
 
+	g_thread_init(NULL);
+	gdk_threads_init();
+
+	gdk_threads_enter ();
+
 	gtk_init(&argc,&argv);
 
 //SETTING UP TASK-MANAGER WINDOW
@@ -237,7 +361,7 @@ int main(int argc,char *argv[]){
 	gtk_builder_add_from_file(task_manager_ui,"task-manager-ui.ui",NULL);
 
 	task_manager_window = gtk_builder_get_object(task_manager_ui,"task-manager");
-	g_signal_connect(task_manager_window,"destroy",G_CALLBACK(gtk_main_quit),NULL);
+	g_signal_connect(task_manager_window,"destroy",G_CALLBACK(shutDown),NULL);
 
 	menubar=gtk_builder_get_object(task_manager_ui,"menubar");
 	
@@ -260,7 +384,7 @@ int main(int argc,char *argv[]){
 	g_signal_connect(file_run,"activate",G_CALLBACK(printMenuActivatedData),"File-Run");
 
 	file_exit=gtk_builder_get_object(task_manager_ui,"menu-file-exit");
-	g_signal_connect(file_exit,"activate",G_CALLBACK(gtk_main_quit),NULL);
+	g_signal_connect(file_exit,"activate",G_CALLBACK(shutDown),NULL);
 
 	options_ontop=gtk_builder_get_object(task_manager_ui,"menu-options-ontop");
 	g_signal_connect(options_ontop,"activate",G_CALLBACK(printMenuActivatedData),"Options-OnTop");
@@ -285,6 +409,7 @@ int main(int argc,char *argv[]){
 	createNewConnectionWindow(NULL,NULL);
 
 	gtk_main();
+	gdk_threads_leave ();
 
 	return 0;
 }

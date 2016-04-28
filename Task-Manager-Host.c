@@ -13,13 +13,15 @@ void Die(char *mess) { perror(mess); return; }
 void HandleClient(int sock) {
 	char buffer[128];
 	int received = -1;
-
+	while(1){
 	/* Receive message */
 	if ((received = recv(sock, buffer, 128, 0)) < 0) {
 		Die("Failed to receive initial bytes from client");
 	}
 	//buffer[received]='\0';
 	printf("%s\n",buffer);
+	if(strcmp(buffer,"BYE")==0)
+		break;
 	FILE *fp;	
 	if((fp=popen(buffer,"r"))==NULL){
 					char msg[]="Error opening pipe!\n";
@@ -45,11 +47,14 @@ void HandleClient(int sock) {
 			Die("Failed to send bytes to client");
 		}
 
-	}
-	strcpy(buffer,"exit");
-	if (send(sock, buffer, 128, 0) != 128) {
+	}	
+	strcpy(buffer,"DONE");
+	if (send(sock, buffer, 128, 0) != 128){
 		Die("Failed to send bytes to client");
 	}
+	sleep(1);
+	}
+	printf("Disconnected.\n");
 	close(sock);
 }
 
