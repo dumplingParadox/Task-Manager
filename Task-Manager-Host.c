@@ -6,17 +6,19 @@
 #include <unistd.h>
 #include <netinet/in.h>
 
+//Run : gcc Task-Manager-Host.c -o Task-Manager-Host -pthread
+
 #define MAXPENDING 5    /* Max connection requests */
           
 void Die(char *mess) { perror(mess); return; }
 
 void handlerTasks(void *socket_desc){
 	int sock = *(int*)socket_desc;
-	char buffer[128];
+	char buffer[256];
 	int received = -1;
 	while(1){
 	/* Receive message */
-	if ((received = recv(sock, buffer, 128, 0)) < 0) {
+	if ((received = recv(sock, buffer, 256, 0)) < 0) {
 		Die("Failed to receive initial bytes from client");
 	}
 	//buffer[received]='\0';
@@ -24,6 +26,7 @@ void handlerTasks(void *socket_desc){
 	if(strcmp(buffer,"BYE")==0)
 		break;
 	FILE *fp;	
+	printf("Executing tasks.\n");
 	if((fp=popen(buffer,"r"))==NULL){
 					char msg[]="Error opening pipe!\n";
 					send(sock,msg,strlen(msg),0);
@@ -42,14 +45,14 @@ void handlerTasks(void *socket_desc){
 		}
 	}*/
 
-	while(fgets(buffer,128,fp)!=NULL){
-		if (send(sock, buffer, 128, 0) != 128) {
+	while(fgets(buffer,256,fp)!=NULL){
+		if (send(sock, buffer, 256, 0) != 256) {
 			Die("Failed to send bytes to client");
 		}
 
 	}	
 	strcpy(buffer,"DONE");
-	if (send(sock, buffer, 128, 0) != 128){
+	if (send(sock, buffer, 256, 0) != 256){
 		Die("Failed to send bytes to client");
 	}
 	sleep(1);
@@ -60,11 +63,11 @@ void handlerTasks(void *socket_desc){
 
 void handlerCPU(void *socket_desc){
 	int sock = *(int*)socket_desc;
-	char buffer[128];
+	char buffer[256];
 	int received = -1;
 	while(1){
 	/* Receive message */
-	if ((received = recv(sock, buffer, 128, 0)) < 0) {
+	if ((received = recv(sock, buffer, 256, 0)) < 0) {
 		Die("Failed to receive initial bytes from client");
 	}
 	//buffer[received]='\0';
@@ -72,6 +75,7 @@ void handlerCPU(void *socket_desc){
 	if(strcmp(buffer,"BYE")==0)
 		break;
 	FILE *fp;	
+	printf("Executing CPU.\n");
 	if((fp=popen(buffer,"r"))==NULL){
 					char msg[]="Error opening pipe!\n";
 					send(sock,msg,strlen(msg),0);
@@ -90,14 +94,14 @@ void handlerCPU(void *socket_desc){
 		}
 	}*/
 
-	while(fgets(buffer,128,fp)!=NULL){
-		if (send(sock, buffer, 128, 0) != 128) {
+	while(fgets(buffer,256,fp)!=NULL){
+		if (send(sock, buffer, 256, 0) != 256) {
 			Die("Failed to send bytes to client");
 		}
 
 	}	
 	strcpy(buffer,"DONE");
-	if (send(sock, buffer, 128, 0) != 128){
+	if (send(sock, buffer, 256, 0) != 256){
 		Die("Failed to send bytes to client");
 	}
 	sleep(1);
@@ -108,11 +112,11 @@ void handlerCPU(void *socket_desc){
 
 void handlerMem(void *socket_desc){
 	int sock = *(int*)socket_desc;
-	char buffer[128];
+	char buffer[256];
 	int received = -1;
 	while(1){
 	/* Receive message */
-	if ((received = recv(sock, buffer, 128, 0)) < 0) {
+	if ((received = recv(sock, buffer, 256, 0)) < 0) {
 		Die("Failed to receive initial bytes from client");
 	}
 	//buffer[received]='\0';
@@ -120,6 +124,7 @@ void handlerMem(void *socket_desc){
 	if(strcmp(buffer,"BYE")==0)
 		break;
 	FILE *fp;	
+	printf("Executing Mem.\n");
 	if((fp=popen(buffer,"r"))==NULL){
 					char msg[]="Error opening pipe!\n";
 					send(sock,msg,strlen(msg),0);
@@ -138,14 +143,14 @@ void handlerMem(void *socket_desc){
 		}
 	}*/
 
-	while(fgets(buffer,128,fp)!=NULL){
-		if (send(sock, buffer, 128, 0) != 128) {
+	while(fgets(buffer,256,fp)!=NULL){
+		if (send(sock, buffer, 256, 0) != 256) {
 			Die("Failed to send bytes to client");
 		}
 
 	}	
 	strcpy(buffer,"DONE");
-	if (send(sock, buffer, 128, 0) != 128){
+	if (send(sock, buffer, 256, 0) != 256){
 		Die("Failed to send bytes to client");
 	}
 	sleep(1);
@@ -156,11 +161,11 @@ void handlerMem(void *socket_desc){
 
 void handlerRun(void *socket_desc){
 	int sock = *(int*)socket_desc;
-	char buffer[128];
+	char buffer[256];
 	int received = -1;
 	while(1){
 	/* Receive message */
-	if ((received = recv(sock, buffer, 128, 0)) < 0) {
+	if ((received = recv(sock, buffer, 256, 0)) < 0) {
 		Die("Failed to receive initial bytes from client");
 	}
 	//buffer[received]='\0';
@@ -168,6 +173,7 @@ void handlerRun(void *socket_desc){
 	if(strcmp(buffer,"BYE")==0)
 		break;
 	FILE *fp;	
+	printf("EXECUTING RUN.\n");
 	if((fp=popen(buffer,"r"))==NULL){
 					char msg[]="Error opening pipe!\n";
 					send(sock,msg,strlen(msg),0);
@@ -186,16 +192,6 @@ void handlerRun(void *socket_desc){
 		}
 	}*/
 
-	while(fgets(buffer,128,fp)!=NULL){
-		if (send(sock, buffer, 128, 0) != 128) {
-			Die("Failed to send bytes to client");
-		}
-
-	}	
-	strcpy(buffer,"DONE");
-	if (send(sock, buffer, 128, 0) != 128){
-		Die("Failed to send bytes to client");
-	}
 	sleep(1);
 	}
 	printf("Disconnected.\n");

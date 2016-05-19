@@ -34,13 +34,14 @@ TO COMPILE :
 	GObject *view_refreshnow,*view_refreshspeed;
 	GObject *help_about;
 	GtkLabel *cpuusage,*memusage;
+	GtkWidget *vp;
 //Variable for Task-Manager ends.
 
 //SOCKET DECLARATIONS
 
 	int taskSock=-1,memSock=-1,cpuSock=-1,runSock=-1;
-	char taskBuffer[128],memBuffer[128],cpuBuffer[128],runBuffer[128];
-	int refreshRate=10;
+	char taskBuffer[256],memBuffer[256],cpuBuffer[256],runBuffer[256];
+	int refreshRate=20;
 	int refreshStop=0;
 
 //SOCKET DECLARATIONS ENDS
@@ -52,26 +53,127 @@ TO COMPILE :
 
 void Die(char *mess) { perror(mess); return; }
 
+void deleteTasks(){
+	GList *children,*iter;
+	int i=0;
+	children=gtk_container_get_children(GTK_CONTAINER(vp));
+	for(iter=children;iter!=NULL;iter=g_list_next(iter)){
+		gtk_widget_destroy(GTK_WIDGET(iter->data));
+	}
+	g_list_free(children);
+	/*free(scrolledWindow);
+	free(box);
+	for(i=0;i<100;i++){
+		free(but[i]);
+		free(temp[i]);
+		free(taskData[i][0]);
+		free(taskData[i][1]);
+		free(taskData[i][2]);
+		free(taskData[i][3]);
+		free(taskData[i][4]);
+	}
+	free(but);
+	free(temp);
+	free(taskData);*/
+}
+
+void killTask(GtkWidget *widget,char data[]){
+	char lbl[20];
+	strcpy(lbl,data);
+	int j=0;
+	char kill[256] = "kill ";
+	//sendMessageOverSocket(runSock,kill);
+	//gtk_widget_destroy(GTK_WIDGET(widget));
+	printf("Button clicked %s\n",lbl);
+}
+
 int receiveDataAndCreateTasks(int sock,char *buffer){
 	int received = 0;
 	int bytes=0;
+	GtkWidget *scrolledWindow;
+	GtkBox *box,*tempIn[100],*tempOut[100];
+	GtkWidget *but[100],*taskData[100][5];
 	char command[50],pid[10],cpu[5],mem[5],user[50];
-	if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
+	if ((bytes = recv(sock, buffer, 256, 0)) < 1) {
 		Die("Failed to receive bytes from server");
 		return 0;
 	}
 
+	box=gtk_box_new(TRUE,0);
+	scrolledWindow = gtk_scrolled_window_new(NULL, NULL);
+	gtk_widget_set_size_request(scrolledWindow, 600, 490);
+	gtk_widget_set_size_request(box, 580, 490);
+	int i=0;
+	vp = GTK_WIDGET(gtk_builder_get_object(task_manager_ui,"process-add-box"));
 	while (strcmp(buffer,"DONE")!=0) {
 		received += bytes;
-		buffer[bytes] = '\0';        /* Assure null terminated string */
+		buffer[bytes] = '\0';	/* Assure null terminated string */
 		sscanf(buffer,"%s%s%s%s%s",command,pid,cpu,mem,user);
-		printf("Task : %s->%s->%s->%s->%s\n",command,pid,cpu,mem,user);
+		//sprintf(buffer,"Task : %s->%s->%s->%s->%s\n",command,pid,cpu,mem,user);
+
+		tempOut[i]=gtk_box_new(FALSE,0);
+		gtk_widget_set_size_request(tempOut[i], 580, 35);
+
+		but[i]= gtk_button_new();
+		gtk_widget_set_size_request(but[i], 580, 35);
+		gtk_button_set_relief(but[i],GTK_RELIEF_NONE);
+
+		tempIn[i]=gtk_box_new(FALSE,0);
+		gtk_widget_set_size_request(tempIn[i], 580, 35);
+
+		taskData[i][0]=gtk_label_new(command);
+		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][0]);
+		gtk_label_set_xalign(taskData[i][0],0.025);
+		gtk_widget_set_size_request(taskData[i][0], 241, 35);
+
+		taskData[i][1]=gtk_label_new(pid);
+		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][1]);
+		gtk_widget_set_size_request(taskData[i][1], 76, 35);
+
+		taskData[i][2]=gtk_label_new(cpu);
+		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][2]);
+		gtk_widget_set_size_request(taskData[i][2], 76, 35);
+
+		taskData[i][3]=gtk_label_new(mem);
+		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][3]);
+		gtk_widget_set_size_request(taskData[i][3], 76, 35);
+
+		taskData[i][4]=gtk_label_new(user);
+		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][4]);
+		gtk_widget_set_size_request(taskData[i][4], 106, 35);
+
+		gtk_widget_show(taskData[i][0]);
+		gtk_widget_show(taskData[i][1]);
+		gtk_widget_show(taskData[i][2]);
+		gtk_widget_show(taskData[i][3]);
+		gtk_widget_show(taskData[i][4]);
+
+		gtk_container_add(GTK_CONTAINER(but[i]),tempIn[i]);
+		gtk_widget_show(tempIn[i]);
+
+		gtk_container_add(GTK_CONTAINER(tempOut[i]),but[i]);
+		gtk_widget_show(but[i]);
+
+		gtk_container_add(GTK_CONTAINER(box),tempOut[i]);
+		gtk_widget_show(tempOut[i]);
+
+		//printf("Sending pid : %s\n",pid);
+		g_signal_connect(GTK_WIDGET(but[i]),"clicked",G_CALLBACK(killTask),pid);		
+		i++;
 		bytes=0;
-		if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
+		if ((bytes = recv(sock, buffer, 256, 0)) < 1) {
 			Die("Failed to receive bytes from server");
 			return 0;
 		}
+
 	}
+	gtk_container_add(GTK_CONTAINER(scrolledWindow),box);
+	gtk_container_add(GTK_CONTAINER(vp),scrolledWindow);
+	gtk_widget_show(box);
+	GdkColor color;
+	gdk_rgba_parse(&color,"#F7F6F6");
+	gtk_widget_override_background_color(scrolledWindow,GTK_STATE_NORMAL,&color);
+	gtk_widget_show(scrolledWindow);
 	return 1;
 }
 
@@ -79,7 +181,7 @@ int receiveCPUUsage(int sock,char *buffer){
 	int received = 0;
 	int bytes=0;
 	char usage[5];
-	if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
+	if ((bytes = recv(sock, buffer, 256, 0)) < 1) {
 		Die("Failed to receive bytes from server");
 		return 0;
 	}
@@ -88,9 +190,8 @@ int receiveCPUUsage(int sock,char *buffer){
 		received += bytes;
 		buffer[bytes] = '\0';        /* Assure null terminated string */
 		sscanf(buffer,"%s",usage);
-		printf("CPU Usage : %s\n",usage);
 		bytes=0;
-		if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
+		if ((bytes = recv(sock, buffer, 256, 0)) < 1) {
 			Die("Failed to receive bytes from server");
 			return 0;
 		}
@@ -101,11 +202,13 @@ int receiveCPUUsage(int sock,char *buffer){
 }
 
 int sendMessageOverSocket(int sock,char *msg){
-	if (send(sock, msg, 128, 0) != 128) {
+	//gdk_threads_enter();
+	printf("Sending : %s\n",msg);
+	if (send(sock, msg, 256, 0) != 256) {
 		Die("Mismatch in number of sent bytes");
 		return 0;
 	}
-	
+	//gdk_threads_leave();
 	return 1;
 }
 
@@ -113,7 +216,7 @@ int receiveMemUsage(int sock,char *buffer){
 	int received = 0;
 	int bytes=0;
 	char usage[5];
-	if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
+	if ((bytes = recv(sock, buffer, 256, 0)) < 1) {
 		Die("Failed to receive bytes from server");
 		return 0;
 	}
@@ -122,9 +225,8 @@ int receiveMemUsage(int sock,char *buffer){
 		received += bytes;
 		buffer[bytes] = '\0';        /* Assure null terminated string */
 		sscanf(buffer,"%s",usage);
-		printf("Memory Usage : %s\n",usage);
 		bytes=0;
-		if ((bytes = recv(sock, buffer, 128, 0)) < 1) {
+		if ((bytes = recv(sock, buffer, 256, 0)) < 1) {
 			Die("Failed to receive bytes from server");
 			return 0;
 		}
@@ -160,7 +262,7 @@ int setupSocket(char *ip,int port){
 	printf("Socket created succesfully.\n");
 	return 1;
 
-	//01 COMMANDS [ Get tasks ] : whoami | xargs top -b -n 1 -u | awk '{if(NR>7)printf "%-s %6s %-4s %-4s %-4s\n",$NF,$1,$9,$10,$2}'
+	//01 COMMANDS [ Get tasks ] : whoami | xargs top -b -n 1 -u | awk '{if(NR>7)printf "%-s %6s %-4s %-4s %-4s\n",$NF,$1,$9,$10,$2}' | sort -k X
 	//02 COMMANDS [ Get CPU% Usage ] : top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print $1"%"}'	
 	//03 COMMANDS [ Get Mem% Usage ] : free -m | grep Mem | awk '{printf("%0.1f%s",$3/$2*100,"%")}'
 }
@@ -238,24 +340,34 @@ struct conDetail{
 };
 
 void threadedSendReceiveTasks(){
+	printf("runTasks?\n");
 	if(taskSock==-1||cpuSock==-1||memSock==-1||runSock==-1||refreshStop)
 		return;
-	sendMessageOverSocket(taskSock,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\'");
+	//gdk_threads_enter();
+	deleteTasks();
+	sendMessageOverSocket(taskSock,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1");
 	receiveDataAndCreateTasks(taskSock,taskBuffer);
+	//gdk_threads_leave ();
 }
 
 void threadedSendReceiveCPU(){
+	printf("runCPU?\n");
 	if(taskSock==-1||cpuSock==-1||memSock==-1||runSock==-1||refreshStop)
 		return;
+	//gdk_threads_enter();
 	sendMessageOverSocket(cpuSock,"top -bn2 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{print 100-$1\"%\"}\'");
 	receiveCPUUsage(cpuSock,cpuBuffer);
+	//gdk_threads_leave ();
 }
 
 void threadedSendReceiveMem(){
+	printf("runMem?\n");
 	if(taskSock==-1||cpuSock==-1||memSock==-1||runSock==-1||refreshStop)
 		return;
+	//gdk_threads_enter();
 	sendMessageOverSocket(memSock,"free -m | grep Mem | awk \'{printf(\"%0.1f%s\",$3/$2*100,\"%\")}\'");
 	receiveMemUsage(memSock,memBuffer);
+	//gdk_threads_leave ();
 }
 
 void *socketSetupThreadFunction(void *detail){
@@ -285,7 +397,7 @@ void *socketSetupThreadFunction(void *detail){
 
 	closeNewConnectionWindow(NULL,loading_connection_window);
 	
-	sendMessageOverSocket(taskSock,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\'");
+	sendMessageOverSocket(taskSock,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1");
 	receiveDataAndCreateTasks(taskSock,taskBuffer);
 	sendMessageOverSocket(cpuSock,"top -bn2 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{print 100-$1\"%\"}\'");
 	receiveCPUUsage(cpuSock,cpuBuffer);
@@ -383,6 +495,7 @@ static void connectToIp(GtkWidget *widget,GtkBuilder *data){
 		close(memSock);
 		close(runSock);
 		taskSock=runSock=cpuSock=memSock=-1;
+		deleteTasks();
 		startConnection(ip,port);
 		//Data Valid, start connection.
 		
@@ -435,6 +548,12 @@ void createNewConnectionWindow(GtkWidget *widget,gpointer data){
 	
 	//gtk_widget_grab_focus(GTK_WIDGET(new_connection_window));
 //SETTING UP NEW CONNECTION WINDOW ends.
+}
+
+gpointer main_callback(gpointer data)
+{
+    gtk_main();
+    return 0;
 }
 
 int main(int argc,char *argv[]){
@@ -497,8 +616,10 @@ int main(int argc,char *argv[]){
 	gtk_widget_show_all(task_manager_window);
 
 	createNewConnectionWindow(NULL,NULL);
-
-	gtk_main();
+	GThread *mainThread;
+	mainThread=g_thread_create(main_callback, NULL, TRUE, NULL);
+	g_thread_join(mainThread);
+	//gtk_main();
 	gdk_threads_leave ();
 
 	return 0;
