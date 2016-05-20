@@ -13,9 +13,12 @@ TO COMPILE :
 #include<unistd.h>
 #include<netinet/in.h>
 #include<pthread.h>
+#include<semaphore.h>
 
 //GLOBAL DECLARATIONS.
 
+	sem_t mutexTask;
+	
 //Variables for New-Connection.
 	GtkBuilder *new_connection_ui;
 	GObject *new_connection_window,*new_connection_okay,*new_connection_cancel;
@@ -35,15 +38,18 @@ TO COMPILE :
 	GObject *help_about;
 	GtkLabel *cpuusage,*memusage;
 	GtkWidget *vp;
+	GtkWidget *scrolledWindow;
+	GtkWidget *box,*tempIn[200],*tempOut[200];
+	GtkWidget *but[200],*taskData[200][5];
 //Variable for Task-Manager ends.
 
 //SOCKET DECLARATIONS
-
+	int alwaysOnTop=0,minClose=0;
 	int taskSock=-1,memSock=-1,cpuSock=-1,runSock=-1;
-	char taskBuffer[256],memBuffer[256],cpuBuffer[256],runBuffer[256];
+	char taskBuffer[512],memBuffer[512],cpuBuffer[512],runBuffer[512];
 	int refreshRate=20;
 	int refreshStop=0;
-
+	int countTask=0,countCPU=0,countMem=0;
 //SOCKET DECLARATIONS ENDS
 
 //GLOBAL DECLARATIONS ENDS.
@@ -53,127 +59,62 @@ TO COMPILE :
 
 void Die(char *mess) { perror(mess); return; }
 
-void deleteTasks(){
+void killTask(GtkWidget *widget,char data[]){
+
 	GList *children,*iter;
 	int i=0;
-	children=gtk_container_get_children(GTK_CONTAINER(vp));
-	for(iter=children;iter!=NULL;iter=g_list_next(iter)){
-		gtk_widget_destroy(GTK_WIDGET(iter->data));
-	}
-	g_list_free(children);
-	/*free(scrolledWindow);
-	free(box);
-	for(i=0;i<100;i++){
-		free(but[i]);
-		free(temp[i]);
-		free(taskData[i][0]);
-		free(taskData[i][1]);
-		free(taskData[i][2]);
-		free(taskData[i][3]);
-		free(taskData[i][4]);
-	}
-	free(but);
-	free(temp);
-	free(taskData);*/
-}
-
-void killTask(GtkWidget *widget,char data[]){
-	char lbl[20];
-	strcpy(lbl,data);
-	int j=0;
-	char kill[256] = "kill ";
-	//sendMessageOverSocket(runSock,kill);
-	//gtk_widget_destroy(GTK_WIDGET(widget));
-	printf("Button clicked %s\n",lbl);
+	children=gtk_container_get_children(GTK_CONTAINER(widget));
+	children=gtk_container_get_children(GTK_CONTAINER(children->data));
+	children=g_list_next(children);
+	
+	char kill[512];
+	sprintf(kill,"kill %s",gtk_label_get_text(children->data));
+	sendMessageOverRunSocket(runSock,kill);
+	gtk_widget_hide(gtk_widget_get_parent(GTK_WIDGET(widget)));
+	//printf("Button clicked %s\n",lbl);
 }
 
 int receiveDataAndCreateTasks(int sock,char *buffer){
 	int received = 0;
 	int bytes=0;
-	GtkWidget *scrolledWindow;
-	GtkBox *box,*tempIn[100],*tempOut[100];
-	GtkWidget *but[100],*taskData[100][5];
-	char command[50],pid[10],cpu[5],mem[5],user[50];
-	if ((bytes = recv(sock, buffer, 256, 0)) < 1) {
+	char command[100],pid[50],cpu[50],mem[50],user[80];
+	//sem_wait(&mutexTask);
+	if ((bytes = recv(sock, buffer, 512, 0)) < 1) {
 		Die("Failed to receive bytes from server");
 		return 0;
 	}
 
-	box=gtk_box_new(TRUE,0);
-	scrolledWindow = gtk_scrolled_window_new(NULL, NULL);
-	gtk_widget_set_size_request(scrolledWindow, 600, 490);
-	gtk_widget_set_size_request(box, 580, 490);
-	int i=0;
-	vp = GTK_WIDGET(gtk_builder_get_object(task_manager_ui,"process-add-box"));
-	while (strcmp(buffer,"DONE")!=0) {
+	int i=0,j=0;
+	
+	while (strcmp(buffer,"DONE")!=0&&i<200) {
 		received += bytes;
 		buffer[bytes] = '\0';	/* Assure null terminated string */
 		sscanf(buffer,"%s%s%s%s%s",command,pid,cpu,mem,user);
-		//sprintf(buffer,"Task : %s->%s->%s->%s->%s\n",command,pid,cpu,mem,user);
 
-		tempOut[i]=gtk_box_new(FALSE,0);
-		gtk_widget_set_size_request(tempOut[i], 580, 35);
+		gtk_label_set_text(taskData[i][0],command);
+		gtk_label_set_text(taskData[i][1],pid);
+		gtk_label_set_text(taskData[i][2],cpu);
+		gtk_label_set_text(taskData[i][3],mem);
+		gtk_label_set_text(taskData[i][4],user);
 
-		but[i]= gtk_button_new();
-		gtk_widget_set_size_request(but[i], 580, 35);
-		gtk_button_set_relief(but[i],GTK_RELIEF_NONE);
-
-		tempIn[i]=gtk_box_new(FALSE,0);
-		gtk_widget_set_size_request(tempIn[i], 580, 35);
-
-		taskData[i][0]=gtk_label_new(command);
-		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][0]);
-		gtk_label_set_xalign(taskData[i][0],0.025);
-		gtk_widget_set_size_request(taskData[i][0], 241, 35);
-
-		taskData[i][1]=gtk_label_new(pid);
-		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][1]);
-		gtk_widget_set_size_request(taskData[i][1], 76, 35);
-
-		taskData[i][2]=gtk_label_new(cpu);
-		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][2]);
-		gtk_widget_set_size_request(taskData[i][2], 76, 35);
-
-		taskData[i][3]=gtk_label_new(mem);
-		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][3]);
-		gtk_widget_set_size_request(taskData[i][3], 76, 35);
-
-		taskData[i][4]=gtk_label_new(user);
-		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][4]);
-		gtk_widget_set_size_request(taskData[i][4], 106, 35);
-
-		gtk_widget_show(taskData[i][0]);
-		gtk_widget_show(taskData[i][1]);
-		gtk_widget_show(taskData[i][2]);
-		gtk_widget_show(taskData[i][3]);
-		gtk_widget_show(taskData[i][4]);
-
-		gtk_container_add(GTK_CONTAINER(but[i]),tempIn[i]);
-		gtk_widget_show(tempIn[i]);
-
-		gtk_container_add(GTK_CONTAINER(tempOut[i]),but[i]);
-		gtk_widget_show(but[i]);
-
-		gtk_container_add(GTK_CONTAINER(box),tempOut[i]);
-		gtk_widget_show(tempOut[i]);
+		gtk_widget_show(GTK_WIDGET(tempOut[i]));
 
 		//printf("Sending pid : %s\n",pid);
-		g_signal_connect(GTK_WIDGET(but[i]),"clicked",G_CALLBACK(killTask),pid);		
+		
 		i++;
 		bytes=0;
-		if ((bytes = recv(sock, buffer, 256, 0)) < 1) {
+		if ((bytes = recv(sock, buffer, 512, 0)) < 1) {
 			Die("Failed to receive bytes from server");
 			return 0;
 		}
 
 	}
-	gtk_container_add(GTK_CONTAINER(scrolledWindow),box);
-	gtk_container_add(GTK_CONTAINER(vp),scrolledWindow);
-	gtk_widget_show(box);
-	GdkColor color;
-	gdk_rgba_parse(&color,"#F7F6F6");
-	gtk_widget_override_background_color(scrolledWindow,GTK_STATE_NORMAL,&color);
-	gtk_widget_show(scrolledWindow);
+
+	for(;i<200;i++){
+		gtk_widget_hide(GTK_WIDGET(tempOut[i]));
+	}
+	//sem_post(&mutexTask);
+	
 	return 1;
 }
 
@@ -181,7 +122,7 @@ int receiveCPUUsage(int sock,char *buffer){
 	int received = 0;
 	int bytes=0;
 	char usage[5];
-	if ((bytes = recv(sock, buffer, 256, 0)) < 1) {
+	if ((bytes = recv(sock, buffer, 512, 0)) < 1) {
 		Die("Failed to receive bytes from server");
 		return 0;
 	}
@@ -191,7 +132,7 @@ int receiveCPUUsage(int sock,char *buffer){
 		buffer[bytes] = '\0';        /* Assure null terminated string */
 		sscanf(buffer,"%s",usage);
 		bytes=0;
-		if ((bytes = recv(sock, buffer, 256, 0)) < 1) {
+		if ((bytes = recv(sock, buffer, 512, 0)) < 1) {
 			Die("Failed to receive bytes from server");
 			return 0;
 		}
@@ -201,10 +142,45 @@ int receiveCPUUsage(int sock,char *buffer){
 	return 1;
 }
 
-int sendMessageOverSocket(int sock,char *msg){
+int sendMessageOverTaskSocket(int sock,char msg[]){
+	//gdk_threads_enter();
+	//sem_wait(&mutexTask);
+	printf("Sending %d : %s\n",countTask++,msg);
+	if (send(sock, msg, 512, 0) != 512) {
+		Die("Mismatch in number of sent bytes");
+		return 0;
+	}
+	//sem_post(&mutexTask);
+	//gdk_threads_leave();
+	return 1;
+}
+
+int sendMessageOverCPUSocket(int sock,char msg[]){
+	//gdk_threads_enter();
+	printf("Sending %d : %s\n",countCPU++,msg);
+	if (send(sock, msg, 512, 0) != 512) {
+		Die("Mismatch in number of sent bytes");
+		return 0;
+	}
+	//gdk_threads_leave();
+	return 1;
+}
+
+int sendMessageOverMemSocket(int sock,char msg[]){
+	//gdk_threads_enter();
+	printf("Sending %d : %s\n",countMem++,msg);
+	if (send(sock, msg, 512, 0) != 512) {
+		Die("Mismatch in number of sent bytes");
+		return 0;
+	}
+	//gdk_threads_leave();
+	return 1;
+}
+
+int sendMessageOverRunSocket(int sock,char msg[]){
 	//gdk_threads_enter();
 	printf("Sending : %s\n",msg);
-	if (send(sock, msg, 256, 0) != 256) {
+	if (send(sock, msg, 512, 0) != 512) {
 		Die("Mismatch in number of sent bytes");
 		return 0;
 	}
@@ -216,7 +192,7 @@ int receiveMemUsage(int sock,char *buffer){
 	int received = 0;
 	int bytes=0;
 	char usage[5];
-	if ((bytes = recv(sock, buffer, 256, 0)) < 1) {
+	if ((bytes = recv(sock, buffer, 512, 0)) < 1) {
 		Die("Failed to receive bytes from server");
 		return 0;
 	}
@@ -226,7 +202,7 @@ int receiveMemUsage(int sock,char *buffer){
 		buffer[bytes] = '\0';        /* Assure null terminated string */
 		sscanf(buffer,"%s",usage);
 		bytes=0;
-		if ((bytes = recv(sock, buffer, 256, 0)) < 1) {
+		if ((bytes = recv(sock, buffer, 512, 0)) < 1) {
 			Die("Failed to receive bytes from server");
 			return 0;
 		}
@@ -254,16 +230,35 @@ int setupSocket(char *ip,int port){
 	echoserver.sin_addr.s_addr = inet_addr(ip);  /* IP address */
 	echoserver.sin_port = htons(port);       /* server port */
 	/* Establish connection */
-	if (connect(taskSock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0||connect(cpuSock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0||connect(memSock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0||connect(runSock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0) {
+	if (connect(taskSock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0){
 		Die("Failed to connect with server");
 		taskSock=runSock=cpuSock=memSock=-1;
 		return 0;
 	}
+	sleep(1);
+	if (connect(cpuSock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0){
+		Die("Failed to connect with server");
+		taskSock=runSock=cpuSock=memSock=-1;
+		return 0;
+	}
+	sleep(1);
+	if (connect(memSock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0){
+		Die("Failed to connect with server");
+		taskSock=runSock=cpuSock=memSock=-1;
+		return 0;
+	}
+	sleep(1);
+	if (connect(runSock,(struct sockaddr *) &echoserver,sizeof(echoserver)) < 0){
+		Die("Failed to connect with server");
+		taskSock=runSock=cpuSock=memSock=-1;
+		return 0;
+	}
+
 	printf("Socket created succesfully.\n");
 	return 1;
 
 	//01 COMMANDS [ Get tasks ] : whoami | xargs top -b -n 1 -u | awk '{if(NR>7)printf "%-s %6s %-4s %-4s %-4s\n",$NF,$1,$9,$10,$2}' | sort -k X
-	//02 COMMANDS [ Get CPU% Usage ] : top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print $1"%"}'	
+	//02 COMMANDS [ Get CPU% Usage ] : top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{printf("%0.1f%",$1);}'	
 	//03 COMMANDS [ Get Mem% Usage ] : free -m | grep Mem | awk '{printf("%0.1f%s",$3/$2*100,"%")}'
 }
 
@@ -271,10 +266,10 @@ int setupSocket(char *ip,int port){
 
 void shutDown(GtkWidget *widget,gpointer data){
 	strcpy(taskBuffer,"BYE");	
-	sendMessageOverSocket(taskSock,taskBuffer);
-	sendMessageOverSocket(cpuSock,taskBuffer);
-	sendMessageOverSocket(memSock,taskBuffer);
-	sendMessageOverSocket(runSock,taskBuffer);
+	sendMessageOverTaskSocket(taskSock,taskBuffer);
+	sendMessageOverCPUSocket(cpuSock,taskBuffer);
+	sendMessageOverMemSocket(memSock,taskBuffer);
+	sendMessageOverRunSocket(runSock,taskBuffer);
 	close(taskSock);
 	close(cpuSock);
 	close(memSock);
@@ -339,34 +334,40 @@ struct conDetail{
 	char port[8];
 };
 
-void threadedSendReceiveTasks(){
+int threadedSendReceiveTasks(){
 	printf("runTasks?\n");
 	if(taskSock==-1||cpuSock==-1||memSock==-1||runSock==-1||refreshStop)
-		return;
+		return 0;
 	//gdk_threads_enter();
-	deleteTasks();
-	sendMessageOverSocket(taskSock,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1");
+	//deleteTasks();
+	strcpy(taskBuffer,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1");
+	sendMessageOverTaskSocket(taskSock,taskBuffer);
 	receiveDataAndCreateTasks(taskSock,taskBuffer);
+	return 1;
 	//gdk_threads_leave ();
 }
 
-void threadedSendReceiveCPU(){
+int threadedSendReceiveCPU(){
 	printf("runCPU?\n");
 	if(taskSock==-1||cpuSock==-1||memSock==-1||runSock==-1||refreshStop)
-		return;
+		return 0;
 	//gdk_threads_enter();
-	sendMessageOverSocket(cpuSock,"top -bn2 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{print 100-$1\"%\"}\'");
+	strcpy(cpuBuffer,"top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{printf(\"%0.1f%s\",100-$1,\"%\");}\'");
+	sendMessageOverCPUSocket(cpuSock,cpuBuffer);
 	receiveCPUUsage(cpuSock,cpuBuffer);
+	return 1;
 	//gdk_threads_leave ();
 }
 
-void threadedSendReceiveMem(){
+int threadedSendReceiveMem(){
 	printf("runMem?\n");
 	if(taskSock==-1||cpuSock==-1||memSock==-1||runSock==-1||refreshStop)
-		return;
+		return 0;
 	//gdk_threads_enter();
-	sendMessageOverSocket(memSock,"free -m | grep Mem | awk \'{printf(\"%0.1f%s\",$3/$2*100,\"%\")}\'");
+	strcpy(memBuffer,"free -m | grep Mem | awk \'{printf(\"%0.1f%s\",$3/$2*100,\"%\")}\'");
+	sendMessageOverMemSocket(memSock,memBuffer);
 	receiveMemUsage(memSock,memBuffer);
+	return 1;
 	//gdk_threads_leave ();
 }
 
@@ -396,12 +397,14 @@ void *socketSetupThreadFunction(void *detail){
 	}
 
 	closeNewConnectionWindow(NULL,loading_connection_window);
-	
-	sendMessageOverSocket(taskSock,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1");
+	strcpy(taskBuffer,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1");
+	sendMessageOverTaskSocket(taskSock,taskBuffer);
 	receiveDataAndCreateTasks(taskSock,taskBuffer);
-	sendMessageOverSocket(cpuSock,"top -bn2 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{print 100-$1\"%\"}\'");
+	strcpy(cpuBuffer,"top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{printf(\"%0.1f%s\",100-$1,\"%\");}\'");
+	sendMessageOverCPUSocket(cpuSock,cpuBuffer);
 	receiveCPUUsage(cpuSock,cpuBuffer);
-	sendMessageOverSocket(memSock,"free -m | grep Mem | awk \'{printf(\"%0.1f%s\",$3/$2*100,\"%\")}\'");
+	strcpy(memBuffer,"free -m | grep Mem | awk \'{printf(\"%0.1f%s\",$3/$2*100,\"%\")}\'");
+	sendMessageOverMemSocket(memSock,memBuffer);
 	receiveMemUsage(memSock,memBuffer);
 
 	g_timeout_add_seconds(refreshRate,threadedSendReceiveTasks,NULL);
@@ -486,16 +489,18 @@ static void connectToIp(GtkWidget *widget,GtkBuilder *data){
 		//gtk_widget_queue_draw (new_connection_window);
 		//printf("IP : %s\nPort : %s\n",ip,port);
 		strcpy(taskBuffer,"BYE");	
-		sendMessageOverSocket(taskSock,taskBuffer);
-		sendMessageOverSocket(cpuSock,taskBuffer);
-		sendMessageOverSocket(memSock,taskBuffer);
-		sendMessageOverSocket(runSock,taskBuffer);
+		sendMessageOverTaskSocket(taskSock,taskBuffer);
+		sendMessageOverCPUSocket(cpuSock,taskBuffer);
+		sendMessageOverMemSocket(memSock,taskBuffer);
+		sendMessageOverRunSocket(runSock,taskBuffer);
 		close(taskSock);
 		close(cpuSock);
 		close(memSock);
 		close(runSock);
 		taskSock=runSock=cpuSock=memSock=-1;
-		deleteTasks();
+		//deleteTasks();
+		gtk_widget_set_sensitive(view_refreshnow,TRUE);
+		gtk_widget_set_sensitive(view_refreshspeed,TRUE);
 		startConnection(ip,port);
 		//Data Valid, start connection.
 		
@@ -556,8 +561,46 @@ gpointer main_callback(gpointer data)
     return 0;
 }
 
-int main(int argc,char *argv[]){
+void onTop(){
+	if(alwaysOnTop==0){
+		gtk_window_set_keep_above(task_manager_window,TRUE);
+		alwaysOnTop=1;
+	}else{
+		gtk_window_set_keep_above(task_manager_window,FALSE);
+		alwaysOnTop=0;
+	}
+}
 
+void delete_eventMod(){
+	shutDown(task_manager_window,NULL);
+}
+
+void minimiseOnClose(){
+	if(minClose==0){
+		g_signal_connect(task_manager_window,"delete-event",G_CALLBACK(gtk_window_iconify),NULL);
+		minClose=1;
+	}else{
+		g_signal_connect(task_manager_window,"delete-event",G_CALLBACK(delete_eventMod),NULL);
+		//g_signal_connect(task_manager_window,"destroy",G_CALLBACK(shutDown),NULL);
+		minClose=0;
+	}
+}
+
+void refreshNow(){
+	strcpy(taskBuffer,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1");
+	sendMessageOverTaskSocket(taskSock,taskBuffer);
+	receiveDataAndCreateTasks(taskSock,taskBuffer);
+	strcpy(cpuBuffer,"top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{printf(\"%0.1f%s\",100-$1,\"%\");}\'");
+	sendMessageOverCPUSocket(cpuSock,cpuBuffer);
+	receiveCPUUsage(cpuSock,cpuBuffer);
+	strcpy(memBuffer,"free -m | grep Mem | awk \'{printf(\"%0.1f%s\",$3/$2*100,\"%\")}\'");
+	sendMessageOverMemSocket(memSock,memBuffer);
+	receiveMemUsage(memSock,memBuffer);
+}
+
+int main(int argc,char *argv[]){
+	int i=0;
+	sem_init(&mutexTask,0,1);
 	g_thread_init(NULL);
 	gdk_threads_init();
 
@@ -569,10 +612,10 @@ int main(int argc,char *argv[]){
 	task_manager_ui=gtk_builder_new();
 	gtk_builder_add_from_file(task_manager_ui,"task-manager-ui.ui",NULL);
 
-	task_manager_window = gtk_builder_get_object(task_manager_ui,"task-manager");
+	task_manager_window = GTK_WIDGET(gtk_builder_get_object(task_manager_ui,"task-manager"));
 	g_signal_connect(task_manager_window,"destroy",G_CALLBACK(shutDown),NULL);
 
-	menubar=gtk_builder_get_object(task_manager_ui,"menubar");
+	menubar=GTK_WIDGET(gtk_builder_get_object(task_manager_ui,"menubar"));
 	
 	menu_file=gtk_builder_get_object(task_manager_ui,"menuitem-file");
 	g_signal_connect(menu_file,"activate",G_CALLBACK(printMenuActivatedData),"Menu-File");
@@ -591,29 +634,100 @@ int main(int argc,char *argv[]){
 
 	file_run=gtk_builder_get_object(task_manager_ui,"menu-file-run");
 	g_signal_connect(file_run,"activate",G_CALLBACK(printMenuActivatedData),"File-Run");
+	gtk_widget_set_sensitive(file_run,FALSE);
 
 	file_exit=gtk_builder_get_object(task_manager_ui,"menu-file-exit");
 	g_signal_connect(file_exit,"activate",G_CALLBACK(shutDown),NULL);
 
 	options_ontop=gtk_builder_get_object(task_manager_ui,"menu-options-ontop");
-	g_signal_connect(options_ontop,"activate",G_CALLBACK(printMenuActivatedData),"Options-OnTop");
+	g_signal_connect(options_ontop,"activate",G_CALLBACK(onTop),"Options-OnTop");
 
 	options_minclose=gtk_builder_get_object(task_manager_ui,"menu-options-minclose");
-	g_signal_connect(options_minclose,"activate",G_CALLBACK(printMenuActivatedData),"Options-MinClose");
+	g_signal_connect(options_minclose,"activate",G_CALLBACK(minimiseOnClose),"Options-MinClose");
 
 	options_color=gtk_builder_get_object(task_manager_ui,"menu-options-color");
 	g_signal_connect(options_color,"activate",G_CALLBACK(printMenuActivatedData),"Options-Color");
+	gtk_widget_set_sensitive(options_color,FALSE);
 
 	view_refreshnow=gtk_builder_get_object(task_manager_ui,"menu-view-refreshnow");
-	g_signal_connect(view_refreshnow,"activate",G_CALLBACK(printMenuActivatedData),"View-Refresh-Now");
+	g_signal_connect(view_refreshnow,"activate",G_CALLBACK(refreshNow),"View-Refresh-Now");
+	gtk_widget_set_sensitive(view_refreshnow,FALSE);
 
 	view_refreshspeed=gtk_builder_get_object(task_manager_ui,"menu-view-refreshspeed");
 	g_signal_connect(view_refreshspeed,"activate",G_CALLBACK(printMenuActivatedData),"View-Refresh-Speed");
+	gtk_widget_set_sensitive(view_refreshspeed,FALSE);
 
 	help_about=gtk_builder_get_object(task_manager_ui,"menu-help-about");
 	g_signal_connect(help_about,"activate",G_CALLBACK(printMenuActivatedData),"Help-About");
 
+
 	gtk_widget_show_all(task_manager_window);
+
+	vp = GTK_WIDGET(gtk_builder_get_object(task_manager_ui,"process-add-box"));
+	box=gtk_box_new(TRUE,0);
+	scrolledWindow =gtk_scrolled_window_new(NULL, NULL);
+	
+	gtk_widget_set_size_request(scrolledWindow, 600, 490);
+	gtk_widget_set_size_request(box, 580, 490);
+
+	for(i=0;i<200;i++){
+		tempOut[i]=gtk_box_new(FALSE,0);
+		gtk_widget_set_size_request(tempOut[i], 580, 35);
+
+		but[i]= gtk_button_new();
+		gtk_widget_set_size_request(but[i], 580, 35);
+		gtk_button_set_relief(but[i],GTK_RELIEF_NONE);
+
+		tempIn[i]=gtk_box_new(FALSE,0);
+		gtk_widget_set_size_request(tempIn[i], 580, 35);
+
+		taskData[i][0]=gtk_label_new("");
+		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][0]);
+		gtk_widget_set_size_request(taskData[i][0], 241, 35);
+		gtk_label_set_justify(taskData[i][0],GTK_JUSTIFY_LEFT);
+
+		taskData[i][1]=gtk_label_new("");
+		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][1]);
+		gtk_widget_set_size_request(taskData[i][1], 76, 35);
+
+		taskData[i][2]=gtk_label_new("");
+		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][2]);
+		gtk_widget_set_size_request(taskData[i][2], 76, 35);
+
+		taskData[i][3]=gtk_label_new("");
+		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][3]);
+		gtk_widget_set_size_request(taskData[i][3], 76, 35);
+
+		taskData[i][4]=gtk_label_new("");
+		gtk_container_add(GTK_CONTAINER(tempIn[i]),taskData[i][4]);
+		gtk_widget_set_size_request(taskData[i][4], 106, 35);
+
+		gtk_widget_show(taskData[i][0]);
+		gtk_widget_show(taskData[i][1]);
+		gtk_widget_show(taskData[i][2]);
+		gtk_widget_show(taskData[i][3]);
+		gtk_widget_show(taskData[i][4]);
+
+		gtk_container_add(GTK_CONTAINER(but[i]),tempIn[i]);
+		gtk_widget_show(tempIn[i]);
+
+		gtk_container_add(GTK_CONTAINER(tempOut[i]),but[i]);
+		gtk_widget_show(but[i]);
+		g_signal_connect(GTK_WIDGET(but[i]),"clicked",G_CALLBACK(killTask),NULL);
+
+		gtk_container_add(GTK_CONTAINER(box),tempOut[i]);
+		//gtk_widget_show(tempOut[i]);
+
+	}
+
+	gtk_container_add(GTK_CONTAINER(scrolledWindow),box);
+	gtk_container_add(GTK_CONTAINER(vp),scrolledWindow);
+	gtk_widget_show(box);
+	GdkColor color;
+	gdk_rgba_parse(&color,"#F7F6F6");
+	gtk_widget_override_background_color(scrolledWindow,GTK_STATE_NORMAL,&color);
+	gtk_widget_show(scrolledWindow);
+
 
 	createNewConnectionWindow(NULL,NULL);
 	GThread *mainThread;
