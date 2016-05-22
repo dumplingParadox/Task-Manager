@@ -14,14 +14,22 @@ TO COMPILE :
 #include<netinet/in.h>
 #include<pthread.h>
 #include<semaphore.h>
+#include <cairo.h>
 
 //GLOBAL DECLARATIONS.
 
 	sem_t mutexTask;
+
+	int graphQueue=12;
+	int circCPU[12],circMem[12];
+	int circCPUFront=-1,circMemFront=-1;
+	int circCPURear=-1,circMemRear=-1;
 	
 //Variables for New-Connection.
 	GtkBuilder *new_connection_ui;
 	GObject *new_connection_window,*new_connection_okay,*new_connection_cancel;
+	GObject *refresh_window,*refresh_okay,*refresh_cancel;
+	GObject *task_window,*task_okay,*task_cancel;
 //Variables for New-Connection ends.
 
 //Variables for New-Connection-Loading.
@@ -36,17 +44,21 @@ TO COMPILE :
 	GObject *options_ontop,*options_minclose,*options_color;
 	GObject *view_refreshnow,*view_refreshspeed;
 	GObject *help_about;
+	GtkWidget *graphCPU,*graphMem;
 	GtkLabel *cpuusage,*memusage;
 	GtkWidget *vp;
 	GtkWidget *scrolledWindow;
 	GtkWidget *box,*tempIn[200],*tempOut[200];
 	GtkWidget *but[200],*taskData[200][5];
+	GtkWidget *sortCommand,*sortPID,*sortCPU,*sortMem,*sortUser;
 //Variable for Task-Manager ends.
 
 //SOCKET DECLARATIONS
 	int alwaysOnTop=0,minClose=0;
 	int taskSock=-1,memSock=-1,cpuSock=-1,runSock=-1;
 	char taskBuffer[512],memBuffer[512],cpuBuffer[512],runBuffer[512];
+	char taskCommand[512];
+	int currSort=1;
 	int refreshRate=20;
 	int refreshStop=0;
 	int countTask=0,countCPU=0,countMem=0;
@@ -86,22 +98,20 @@ int receiveDataAndCreateTasks(int sock,char *buffer){
 
 	int i=0,j=0;
 	
-	while (strcmp(buffer,"DONE")!=0&&i<200) {
+	while (strcmp(buffer,"DONE")!=0) {
 		received += bytes;
 		buffer[bytes] = '\0';	/* Assure null terminated string */
 		sscanf(buffer,"%s%s%s%s%s",command,pid,cpu,mem,user);
+		if(strcmp(command,"sh")!=0&&i<200){
+			gtk_label_set_text(taskData[i][0],command);
+			gtk_label_set_text(taskData[i][1],pid);
+			gtk_label_set_text(taskData[i][2],cpu);
+			gtk_label_set_text(taskData[i][3],mem);
+			gtk_label_set_text(taskData[i][4],user);
 
-		gtk_label_set_text(taskData[i][0],command);
-		gtk_label_set_text(taskData[i][1],pid);
-		gtk_label_set_text(taskData[i][2],cpu);
-		gtk_label_set_text(taskData[i][3],mem);
-		gtk_label_set_text(taskData[i][4],user);
-
-		gtk_widget_show(GTK_WIDGET(tempOut[i]));
-
-		//printf("Sending pid : %s\n",pid);
-		
-		i++;
+			gtk_widget_show(GTK_WIDGET(tempOut[i]));
+			i++;
+		}
 		bytes=0;
 		if ((bytes = recv(sock, buffer, 512, 0)) < 1) {
 			Die("Failed to receive bytes from server");
@@ -118,9 +128,32 @@ int receiveDataAndCreateTasks(int sock,char *buffer){
 	return 1;
 }
 
+void pushIntoCircularQueue(int circular[],int *front,int *rear, int value){
+
+	if(*front==-1){
+		*front=*rear=0;
+	}else if(*front==(*rear)-1){
+		(*front)++;
+		if(*rear==graphQueue-1){
+			*rear=-1;
+		}
+		(*rear)++;
+	}else if(*rear==0&&*front==graphQueue-1){
+		*front=0;
+		(*rear)++;
+	}else if(*front==graphQueue-1){
+		*front=0;
+	}else{
+		(*front)++;
+	}
+	circular[*front]=value;
+
+}
+
 int receiveCPUUsage(int sock,char *buffer){
 	int received = 0;
 	int bytes=0;
+	float value;
 	char usage[5];
 	if ((bytes = recv(sock, buffer, 512, 0)) < 1) {
 		Die("Failed to receive bytes from server");
@@ -130,15 +163,18 @@ int receiveCPUUsage(int sock,char *buffer){
 	while (strcmp(buffer,"DONE")!=0) {
 		received += bytes;
 		buffer[bytes] = '\0';        /* Assure null terminated string */
-		sscanf(buffer,"%s",usage);
+		sscanf(buffer,"%f",&value);
 		bytes=0;
 		if ((bytes = recv(sock, buffer, 512, 0)) < 1) {
 			Die("Failed to receive bytes from server");
 			return 0;
 		}
 	}
-	cpuusage=GTK_WIDGET(gtk_builder_get_object(task_manager_ui,"cpu-usage-label"));
-	gtk_label_set_text(cpuusage, usage);
+	pushIntoCircularQueue(circCPU,&circCPUFront,&circCPURear,value);
+	sprintf(buffer,"%0.1f%s",value,"%");
+	gtk_widget_queue_draw(graphCPU);	
+	
+	gtk_label_set_text(cpuusage, buffer);
 	return 1;
 }
 
@@ -191,6 +227,7 @@ int sendMessageOverRunSocket(int sock,char msg[]){
 int receiveMemUsage(int sock,char *buffer){
 	int received = 0;
 	int bytes=0;
+	float value;
 	char usage[5];
 	if ((bytes = recv(sock, buffer, 512, 0)) < 1) {
 		Die("Failed to receive bytes from server");
@@ -200,15 +237,18 @@ int receiveMemUsage(int sock,char *buffer){
 	while (strcmp(buffer,"DONE")!=0) {
 		received += bytes;
 		buffer[bytes] = '\0';        /* Assure null terminated string */
-		sscanf(buffer,"%s",usage);
+		sscanf(buffer,"%f",&value);
 		bytes=0;
 		if ((bytes = recv(sock, buffer, 512, 0)) < 1) {
 			Die("Failed to receive bytes from server");
 			return 0;
 		}
 	}
-	memusage=GTK_WIDGET(gtk_builder_get_object(task_manager_ui,"mem-usage-label"));
-	gtk_label_set_text(memusage, usage);
+	pushIntoCircularQueue(circMem,&circMemFront,&circMemRear,value);
+	sprintf(buffer,"%0.1f%s",value,"%");
+	gtk_widget_queue_draw(graphMem);	
+	
+	gtk_label_set_text(memusage, buffer);
 	return 1;
 }
 
@@ -258,8 +298,8 @@ int setupSocket(char *ip,int port){
 	return 1;
 
 	//01 COMMANDS [ Get tasks ] : whoami | xargs top -b -n 1 -u | awk '{if(NR>7)printf "%-s %6s %-4s %-4s %-4s\n",$NF,$1,$9,$10,$2}' | sort -k X
-	//02 COMMANDS [ Get CPU% Usage ] : top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{printf("%0.1f%",$1);}'	
-	//03 COMMANDS [ Get Mem% Usage ] : free -m | grep Mem | awk '{printf("%0.1f%s",$3/$2*100,"%")}'
+	//02 COMMANDS [ Get CPU% Usage ] : top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{printf("%0.1f",$1);}'	
+	//03 COMMANDS [ Get Mem% Usage ] : free -m | grep Mem | awk '{printf("%0.1f",$3/$2*100)}'
 }
 
 //SOCKET ENDS
@@ -340,7 +380,7 @@ int threadedSendReceiveTasks(){
 		return 0;
 	//gdk_threads_enter();
 	//deleteTasks();
-	strcpy(taskBuffer,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1");
+	strcpy(taskBuffer,taskCommand);
 	sendMessageOverTaskSocket(taskSock,taskBuffer);
 	receiveDataAndCreateTasks(taskSock,taskBuffer);
 	return 1;
@@ -352,7 +392,7 @@ int threadedSendReceiveCPU(){
 	if(taskSock==-1||cpuSock==-1||memSock==-1||runSock==-1||refreshStop)
 		return 0;
 	//gdk_threads_enter();
-	strcpy(cpuBuffer,"top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{printf(\"%0.1f%s\",100-$1,\"%\");}\'");
+	strcpy(cpuBuffer,"top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{printf(\"%0.1f\",100-$1);}\'");
 	sendMessageOverCPUSocket(cpuSock,cpuBuffer);
 	receiveCPUUsage(cpuSock,cpuBuffer);
 	return 1;
@@ -364,7 +404,7 @@ int threadedSendReceiveMem(){
 	if(taskSock==-1||cpuSock==-1||memSock==-1||runSock==-1||refreshStop)
 		return 0;
 	//gdk_threads_enter();
-	strcpy(memBuffer,"free -m | grep Mem | awk \'{printf(\"%0.1f%s\",$3/$2*100,\"%\")}\'");
+	strcpy(memBuffer,"free -m | grep Mem | awk \'{printf(\"%0.1f\",$3/$2*100)}\'");
 	sendMessageOverMemSocket(memSock,memBuffer);
 	receiveMemUsage(memSock,memBuffer);
 	return 1;
@@ -397,13 +437,13 @@ void *socketSetupThreadFunction(void *detail){
 	}
 
 	closeNewConnectionWindow(NULL,loading_connection_window);
-	strcpy(taskBuffer,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1");
+	strcpy(taskBuffer,taskCommand);
 	sendMessageOverTaskSocket(taskSock,taskBuffer);
 	receiveDataAndCreateTasks(taskSock,taskBuffer);
-	strcpy(cpuBuffer,"top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{printf(\"%0.1f%s\",100-$1,\"%\");}\'");
+	strcpy(cpuBuffer,"top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{printf(\"%0.1f\",100-$1);}\'");
 	sendMessageOverCPUSocket(cpuSock,cpuBuffer);
 	receiveCPUUsage(cpuSock,cpuBuffer);
-	strcpy(memBuffer,"free -m | grep Mem | awk \'{printf(\"%0.1f%s\",$3/$2*100,\"%\")}\'");
+	strcpy(memBuffer,"free -m | grep Mem | awk \'{printf(\"%0.1f\",$3/$2*100)}\'");
 	sendMessageOverMemSocket(memSock,memBuffer);
 	receiveMemUsage(memSock,memBuffer);
 
@@ -501,6 +541,8 @@ static void connectToIp(GtkWidget *widget,GtkBuilder *data){
 		//deleteTasks();
 		gtk_widget_set_sensitive(view_refreshnow,TRUE);
 		gtk_widget_set_sensitive(view_refreshspeed,TRUE);
+		gtk_widget_set_sensitive(view_refreshspeed,TRUE);
+		gtk_widget_set_sensitive(file_run,TRUE);
 		startConnection(ip,port);
 		//Data Valid, start connection.
 		
@@ -555,6 +597,117 @@ void createNewConnectionWindow(GtkWidget *widget,gpointer data){
 //SETTING UP NEW CONNECTION WINDOW ends.
 }
 
+void setRefreshRate(){
+	GObject *time_entry=gtk_builder_get_object(new_connection_ui,"time-entry");
+	char time_refresh[16];
+	strcpy(time_refresh,gtk_entry_get_text(GTK_ENTRY(time_entry)));
+	int flagTime=0,time=0;
+	GdkColor red,green;
+	gdk_color_parse("red",&red);
+	gdk_color_parse("green",&green);
+	
+	sscanf(time_refresh,"%d",&time);
+
+	if(time>=20||time==0){
+		if(time==0)
+			refreshStop=1;
+		else{
+			refreshRate=time;
+			refreshStop=0;
+		}
+		gtk_widget_modify_fg(GTK_WIDGET(time_entry),GTK_STATE_NORMAL,&green);
+		gtk_widget_destroy(refresh_window);
+	}else{
+		gtk_widget_modify_fg(GTK_WIDGET(time_entry),GTK_STATE_NORMAL,&red);
+	}
+}
+
+void createRefreshRateWindow(GtkWidget *widget,gpointer data){
+//SETTING UP NEW CONNECTION WINDOW
+	gtk_widget_set_sensitive(task_manager_window,FALSE);
+
+	GtkWidget *box;
+	GtkWidget *content_area;
+
+	refresh_window = gtk_dialog_new();
+	
+	new_connection_ui=gtk_builder_new();
+	gtk_builder_add_from_file(new_connection_ui,"new-connection-dialogue.ui",NULL);
+
+	box = gtk_builder_get_object(new_connection_ui,"refresh-speed-box");
+	
+	refresh_okay=gtk_builder_get_object(new_connection_ui,"okay-button2");
+	g_signal_connect(refresh_okay,"clicked",G_CALLBACK(setRefreshRate),new_connection_ui);
+
+	refresh_cancel=gtk_builder_get_object(new_connection_ui,"cancel-button");
+	g_signal_connect(refresh_cancel,"clicked",G_CALLBACK(closeNewConnectionWindow),refresh_window);
+
+	content_area = gtk_dialog_get_content_area(GTK_DIALOG(refresh_window));
+	//gtk_widget_reparent(box,GTK_CONTAINER(content_area));
+	gtk_container_add(GTK_CONTAINER(content_area), box);
+
+	g_signal_connect(refresh_window, "destroy", G_CALLBACK(closeNewConnectionWindow), refresh_window);
+	gtk_window_set_title(refresh_window,"Set Refresh Rate");
+	gtk_window_set_skip_taskbar_hint(refresh_window,TRUE);
+	gtk_window_set_resizable(GTK_WINDOW(refresh_window), FALSE);
+
+	gtk_widget_show_all(refresh_window);
+
+
+	
+	//gtk_widget_grab_focus(GTK_WIDGET(new_connection_window));
+//SETTING UP NEW CONNECTION WINDOW ends.
+}
+
+void executeTask(){
+	GObject *task_entry=gtk_builder_get_object(new_connection_ui,"exec-entry");
+	char task_refresh[512];
+	strcpy(task_refresh,gtk_entry_get_text(GTK_ENTRY(task_entry)));
+	
+	sendMessageOverRunSocket(runSock,task_refresh);
+
+	gtk_widget_destroy(refresh_window);
+	
+}
+
+
+void createNewTaskWindow(GtkWidget *widget,gpointer data){
+//SETTING UP NEW CONNECTION WINDOW
+	gtk_widget_set_sensitive(task_manager_window,FALSE);
+
+	GtkWidget *box;
+	GtkWidget *content_area;
+
+	task_window = gtk_dialog_new();
+	
+	new_connection_ui=gtk_builder_new();
+	gtk_builder_add_from_file(new_connection_ui,"new-connection-dialogue.ui",NULL);
+
+	box = gtk_builder_get_object(new_connection_ui,"new-task-box");
+	
+	task_okay=gtk_builder_get_object(new_connection_ui,"okay-button1");
+	g_signal_connect(task_okay,"clicked",G_CALLBACK(executeTask),new_connection_ui);
+
+	task_cancel=gtk_builder_get_object(new_connection_ui,"cancel-button1");
+	g_signal_connect(task_cancel,"clicked",G_CALLBACK(closeNewConnectionWindow),task_window);
+
+	content_area = gtk_dialog_get_content_area(GTK_DIALOG(task_window));
+	//gtk_widget_reparent(box,GTK_CONTAINER(content_area));
+	gtk_container_add(GTK_CONTAINER(content_area), box);
+
+	g_signal_connect(task_window, "destroy", G_CALLBACK(closeNewConnectionWindow), task_window);
+	gtk_window_set_title(task_window,"Run a New Task");
+	gtk_window_set_skip_taskbar_hint(task_window,TRUE);
+	gtk_window_set_resizable(GTK_WINDOW(task_window), FALSE);
+
+	gtk_widget_show_all(task_window);
+
+
+	
+	//gtk_widget_grab_focus(GTK_WIDGET(new_connection_window));
+//SETTING UP NEW CONNECTION WINDOW ends.
+}
+
 gpointer main_callback(gpointer data)
 {
     gtk_main();
@@ -587,15 +740,284 @@ void minimiseOnClose(){
 }
 
 void refreshNow(){
-	strcpy(taskBuffer,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1");
+	strcpy(taskBuffer,taskCommand);
 	sendMessageOverTaskSocket(taskSock,taskBuffer);
 	receiveDataAndCreateTasks(taskSock,taskBuffer);
-	strcpy(cpuBuffer,"top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{printf(\"%0.1f%s\",100-$1,\"%\");}\'");
+	strcpy(cpuBuffer,"top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{printf(\"%0.1f\",100-$1);}\'");
 	sendMessageOverCPUSocket(cpuSock,cpuBuffer);
 	receiveCPUUsage(cpuSock,cpuBuffer);
-	strcpy(memBuffer,"free -m | grep Mem | awk \'{printf(\"%0.1f%s\",$3/$2*100,\"%\")}\'");
+	strcpy(memBuffer,"free -m | grep Mem | awk \'{printf(\"%0.1f\",$3/$2*100)}\'");
 	sendMessageOverMemSocket(memSock,memBuffer);
 	receiveMemUsage(memSock,memBuffer);
+}
+
+static gboolean drawCPUGraph(GtkWidget *widget, cairo_t *cr, gpointer data){
+
+	int i=0;
+	float prevX;
+	/* set bg color as white */
+	cairo_set_source_rgb(cr, 1, 1, 1);
+	cairo_paint(cr);
+	
+	/* set color for rectangle */
+	cairo_set_source_rgb(cr, 0.07, 0.49, 0.73);
+	/* set the line width */
+	cairo_set_line_width(cr,2.5);
+	/* draw the rectangle's path beginning at 3,3 */
+	cairo_rectangle (cr, 0, 0, 400, 200);
+	/* stroke the rectangle's path with the chosen color so it's actually visible */
+	cairo_stroke(cr);
+	
+	/*drawing checkered boxes through graph */
+	cairo_set_source_rgb(cr, 0.85, 0.92, 0.96);
+	/* set the line width */
+	cairo_set_line_width(cr,0.8);
+	/* draw the rectangle's path beginning at 3,3 */
+	cairo_rectangle (cr, 50, 0, 50, 200);
+	cairo_rectangle (cr, 100, 0, 100, 200);
+	cairo_rectangle (cr, 150, 0, 150, 200);
+	cairo_rectangle (cr, 200, 0, 200, 200);
+	cairo_rectangle (cr, 250, 0, 250, 200);
+	cairo_rectangle (cr, 300, 0, 300, 200);
+	cairo_rectangle (cr, 350, 0, 350, 200);
+
+	cairo_rectangle (cr, 0, 40, 400, 40);
+	cairo_rectangle (cr, 0, 80, 400, 80);
+	cairo_rectangle (cr, 0, 120, 400, 120);
+	cairo_rectangle (cr, 0, 160, 400, 160);
+	/* stroke the rectangle's path with the chosen color so it's actually visible */
+	cairo_stroke(cr);
+
+	if(circCPURear==-1)
+		return;
+	
+	prevX=400/(graphQueue-2);
+	cairo_set_source_rgb(cr, 0.85, 0.92, 0.96);
+	cairo_set_line_width(cr,2);
+	cairo_arc(cr, prevX-400/(graphQueue-2),(float)(200-(float)(2*circCPU[circCPURear])), 5, 0, 2*G_PI);
+	cairo_fill(cr);
+
+
+	if(circCPURear<=circCPUFront){
+		for(i=circCPURear+1;i<=circCPUFront;i++){
+			cairo_set_source_rgb(cr, 0.85, 0.92, 0.96);
+			cairo_set_line_width(cr,2);
+			cairo_arc(cr, prevX,(float)(200-(float)(2*circCPU[i])), 5, 0, 2*G_PI);
+			cairo_fill(cr);
+
+			/* setup for graph lines */
+			cairo_set_source_rgb(cr, 0.09, 0.50, 0.74);
+			/* set the line width */
+			cairo_set_line_width(cr,1.5);
+			cairo_move_to(cr, prevX-400/(graphQueue-2),(float)(200-(float)(2*circCPU[i-1])));
+			cairo_line_to(cr, prevX, (float)(200-(float)(2*circCPU[i])));
+			cairo_stroke(cr);
+			prevX+=400/(graphQueue-2);
+		}
+	}else{
+		for(i=circCPURear+1;i<=graphQueue-1;i++){
+			cairo_set_source_rgb(cr, 0.85, 0.92, 0.96);
+			cairo_set_line_width(cr,2);
+			cairo_arc(cr, prevX,(float)(200-(float)(2*circCPU[i])), 5, 0, 2*G_PI);
+			cairo_fill(cr);
+
+			/* setup for graph lines */
+			cairo_set_source_rgb(cr, 0.09, 0.50, 0.74);
+			/* set the line width */
+			cairo_set_line_width(cr,1.5);
+			cairo_move_to(cr, prevX-400/(graphQueue-2),(float)(200-(float)(2*circCPU[i-1])));
+			cairo_line_to(cr, prevX, (float)(200-(float)(2*circCPU[i])));
+			cairo_stroke(cr);
+			prevX+=400/(graphQueue-2);
+		}
+		
+		for(i=0;i<=circCPUFront;i++){
+			cairo_set_source_rgb(cr, 0.85, 0.92, 0.96);
+			cairo_set_line_width(cr,2);
+			cairo_arc(cr, prevX,(float)(200-(float)(2*circCPU[i])), 5, 0, 2*G_PI);
+			cairo_fill(cr);
+
+			/* setup for graph lines */
+			cairo_set_source_rgb(cr, 0.09, 0.50, 0.74);
+			/* set the line width */
+			cairo_set_line_width(cr,1.5);
+			if(i==0)
+				cairo_move_to(cr, prevX-400/(graphQueue-2),(float)(200-(float)(2*circCPU[graphQueue-1])));
+			else
+				cairo_move_to(cr, prevX-400/(graphQueue-2),(float)(200-(float)(2*circCPU[i-1])));
+			cairo_line_to(cr, prevX, (float)(200-(float)(2*circCPU[i])));
+			cairo_stroke(cr);
+			prevX+=400/(graphQueue-2);
+		}
+	}
+
+}
+
+static gboolean drawMemGraph(GtkWidget *widget, cairo_t *cr, gpointer data){
+
+	int i=0;
+	float prevX;
+	/* set bg color as white */
+	cairo_set_source_rgb(cr, 1, 1, 1);
+	cairo_paint(cr);
+	
+	/* set color for rectangle */
+	cairo_set_source_rgb(cr, 0.07, 0.49, 0.73);
+	/* set the line width */
+	cairo_set_line_width(cr,2.5);
+	/* draw the rectangle's path beginning at 3,3 */
+	cairo_rectangle (cr, 0, 0, 400, 200);
+	/* stroke the rectangle's path with the chosen color so it's actually visible */
+	cairo_stroke(cr);
+	
+	/*drawing checkered boxes through graph */
+	cairo_set_source_rgb(cr, 0.85, 0.92, 0.96);
+	/* set the line width */
+	cairo_set_line_width(cr,0.8);
+	/* draw the rectangle's path beginning at 3,3 */
+	cairo_rectangle (cr, 50, 0, 50, 200);
+	cairo_rectangle (cr, 100, 0, 100, 200);
+	cairo_rectangle (cr, 150, 0, 150, 200);
+	cairo_rectangle (cr, 200, 0, 200, 200);
+	cairo_rectangle (cr, 250, 0, 250, 200);
+	cairo_rectangle (cr, 300, 0, 300, 200);
+	cairo_rectangle (cr, 350, 0, 350, 200);
+
+	cairo_rectangle (cr, 0, 40, 400, 40);
+	cairo_rectangle (cr, 0, 80, 400, 80);
+	cairo_rectangle (cr, 0, 120, 400, 120);
+	cairo_rectangle (cr, 0, 160, 400, 160);
+	/* stroke the rectangle's path with the chosen color so it's actually visible */
+	cairo_stroke(cr);
+
+	if(circMemRear==-1)
+		return;
+	
+	prevX=400/(graphQueue-2);
+	cairo_set_source_rgb(cr,0.85, 0.92, 0.96);
+	cairo_set_line_width(cr,2);
+	cairo_arc(cr, prevX-400/(graphQueue-2),(float)(200-(float)(2*circMem[circMemRear])), 5, 0, 2*G_PI);
+	cairo_fill(cr);
+
+
+	if(circMemRear<=circMemFront){
+		for(i=circMemRear+1;i<=circMemFront;i++){
+			cairo_set_source_rgb(cr,0.85, 0.92, 0.96);
+			cairo_set_line_width(cr,2);
+			cairo_arc(cr, prevX,(float)(200-(float)(2*circMem[i])), 5, 0, 2*G_PI);
+			cairo_fill(cr);
+
+			/* setup for graph lines */
+			cairo_set_source_rgb(cr, 0.09, 0.50, 0.74);
+			/* set the line width */
+			cairo_set_line_width(cr,1.5);
+			cairo_move_to(cr, prevX-400/(graphQueue-2),(float)(200-(float)(2*circMem[i-1])));
+			cairo_line_to(cr, prevX, (float)(200-(float)(2*circMem[i])));
+			cairo_stroke(cr);
+			prevX+=400/(graphQueue-2);
+		}
+	}else{
+		for(i=circMemRear+1;i<=graphQueue-1;i++){
+			cairo_set_source_rgb(cr, 0.85, 0.92, 0.96);
+			cairo_set_line_width(cr,2);
+			cairo_arc(cr, prevX,(float)(200-(float)(2*circMem[i])), 5, 0, 2*G_PI);
+			cairo_fill(cr);
+
+			/* setup for graph lines */
+			cairo_set_source_rgb(cr, 0.09, 0.50, 0.74);
+			/* set the line width */
+			cairo_set_line_width(cr,1.5);
+			cairo_move_to(cr, prevX-400/(graphQueue-2),(float)(200-(float)(2*circMem[i-1])));
+			cairo_line_to(cr, prevX, (float)(200-(float)(2*circMem[i])));
+			cairo_stroke(cr);
+			prevX+=400/(graphQueue-2);
+		}
+		
+		for(i=0;i<=circMemFront;i++){
+			cairo_set_source_rgb(cr, 0.85, 0.92, 0.96);
+			cairo_set_line_width(cr,2);
+			cairo_arc(cr, prevX,(float)(200-(float)(2*circMem[i])), 5, 0, 2*G_PI);
+			cairo_fill(cr);
+
+			/* setup for graph lines */
+			cairo_set_source_rgb(cr, 0.09, 0.50, 0.74);
+			/* set the line width */
+			cairo_set_line_width(cr,1.5);
+			if(i==0)
+				cairo_move_to(cr, prevX-400/(graphQueue-2),(float)(200-(float)(2*circMem[graphQueue-1])));
+			else
+				cairo_move_to(cr, prevX-400/(graphQueue-2),(float)(200-(float)(2*circMem[i-1])));
+			cairo_line_to(cr, prevX, (float)(200-(float)(2*circMem[i])));
+			cairo_stroke(cr);
+			prevX+=400/(graphQueue-2);
+		}
+	}
+
+}
+
+void sortByCommand(){
+	if(currSort==1){
+		currSort=-1;
+		strcpy(taskCommand,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1 -r");
+	}else{
+		currSort=1;
+		strcpy(taskCommand,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1");
+	}
+	strcpy(taskBuffer,taskCommand);
+	sendMessageOverTaskSocket(taskSock,taskBuffer);
+	receiveDataAndCreateTasks(taskSock,taskBuffer);
+}
+
+void sortByPID(){
+	if(currSort==2){
+		currSort=-2;
+		strcpy(taskCommand,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 2 -r");
+	}else{
+		currSort=2;
+		strcpy(taskCommand,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 2");
+	}
+	strcpy(taskBuffer,taskCommand);
+	sendMessageOverTaskSocket(taskSock,taskBuffer);
+	receiveDataAndCreateTasks(taskSock,taskBuffer);
+}
+
+void sortByCPU(){
+	if(currSort==3){
+		currSort=-3;
+		strcpy(taskCommand,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 3 -r");
+	}else{
+		currSort=3;
+		strcpy(taskCommand,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 3");
+	}
+	strcpy(taskBuffer,taskCommand);
+	sendMessageOverTaskSocket(taskSock,taskBuffer);
+	receiveDataAndCreateTasks(taskSock,taskBuffer);
+}
+
+void sortByMem(){
+	if(currSort==4){
+		currSort=-4;
+		strcpy(taskCommand,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 4 -r");
+	}else{
+		currSort=4;
+		strcpy(taskCommand,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 4");
+	}
+	strcpy(taskBuffer,taskCommand);
+	sendMessageOverTaskSocket(taskSock,taskBuffer);
+	receiveDataAndCreateTasks(taskSock,taskBuffer);
+}
+
+void sortByUser(){
+	if(currSort==5){
+		currSort=-5;
+		strcpy(taskCommand,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 5 -r");
+	}else{
+		currSort=5;
+		strcpy(taskCommand,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 5");
+	}
+	strcpy(taskBuffer,taskCommand);
+	sendMessageOverTaskSocket(taskSock,taskBuffer);
+	receiveDataAndCreateTasks(taskSock,taskBuffer);
 }
 
 int main(int argc,char *argv[]){
@@ -633,7 +1055,7 @@ int main(int argc,char *argv[]){
 	g_signal_connect(file_newcon,"activate",G_CALLBACK(createNewConnectionWindow),NULL);
 
 	file_run=gtk_builder_get_object(task_manager_ui,"menu-file-run");
-	g_signal_connect(file_run,"activate",G_CALLBACK(printMenuActivatedData),"File-Run");
+	g_signal_connect(file_run,"activate",G_CALLBACK(createNewTaskWindow),"File-Run");
 	gtk_widget_set_sensitive(file_run,FALSE);
 
 	file_exit=gtk_builder_get_object(task_manager_ui,"menu-file-exit");
@@ -654,12 +1076,37 @@ int main(int argc,char *argv[]){
 	gtk_widget_set_sensitive(view_refreshnow,FALSE);
 
 	view_refreshspeed=gtk_builder_get_object(task_manager_ui,"menu-view-refreshspeed");
-	g_signal_connect(view_refreshspeed,"activate",G_CALLBACK(printMenuActivatedData),"View-Refresh-Speed");
+	g_signal_connect(view_refreshspeed,"activate",G_CALLBACK(createRefreshRateWindow),"View-Refresh-Speed");
 	gtk_widget_set_sensitive(view_refreshspeed,FALSE);
 
 	help_about=gtk_builder_get_object(task_manager_ui,"menu-help-about");
 	g_signal_connect(help_about,"activate",G_CALLBACK(printMenuActivatedData),"Help-About");
 
+	strcpy(taskCommand,"whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1");
+
+	sortCommand=gtk_builder_get_object(task_manager_ui,"process-name");
+	g_signal_connect(sortCommand,"clicked",G_CALLBACK(sortByCommand),NULL);
+
+	sortPID=gtk_builder_get_object(task_manager_ui,"process-pid");
+	g_signal_connect(sortPID,"clicked",G_CALLBACK(sortByPID),NULL);
+
+	sortCPU=gtk_builder_get_object(task_manager_ui,"process-cpu");
+	g_signal_connect(sortCPU,"clicked",G_CALLBACK(sortByCPU),NULL);
+
+	sortMem=gtk_builder_get_object(task_manager_ui,"process-memory");
+	g_signal_connect(sortMem,"clicked",G_CALLBACK(sortByMem),NULL);
+
+	sortUser=gtk_builder_get_object(task_manager_ui,"process-user");
+	g_signal_connect(sortUser,"clicked",G_CALLBACK(sortByUser),NULL);
+
+	cpuusage=GTK_WIDGET(gtk_builder_get_object(task_manager_ui,"cpu-usage-label"));
+	memusage=GTK_WIDGET(gtk_builder_get_object(task_manager_ui,"mem-usage-label"));
+
+	graphCPU = (gtk_builder_get_object(task_manager_ui,"cpuGraphArea"));
+	g_signal_connect (graphCPU, "draw", G_CALLBACK(drawCPUGraph),  NULL);
+
+	graphMem = (gtk_builder_get_object(task_manager_ui,"memGraphArea"));
+	g_signal_connect (graphMem, "draw", G_CALLBACK(drawMemGraph),  NULL);
 
 	gtk_widget_show_all(task_manager_window);
 

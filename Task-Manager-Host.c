@@ -175,7 +175,7 @@ void handlerMem(void *socket_desc){
 void handlerRun(void *socket_desc){
 	int sock = *(int*)socket_desc;
 	char buffer[512];
-	int received = -1;
+	int received = -1,pid;
 	while(1){
 		/* Receive message */
 		if ((received = recv(sock, buffer, 512, 0)) < 3) {
@@ -188,11 +188,10 @@ void handlerRun(void *socket_desc){
 			break;
 		FILE *fp;	
 		printf("EXECUTING RUN.\n");
-		if((fp=popen(buffer,"r"))==NULL){
-			char msg[]="Error opening pipe!\n";
-			return;
+				pid=fork();
+		if(pid==0){
+			system(buffer);
 		}
-	
 		sleep(1);
 	}
 	printf("Disconnected.\n");
@@ -224,45 +223,50 @@ int main(int argc, char *argv[]) {
 	if (listen(serversock, MAXPENDING) < 0) {
 		Die("Failed to listen on server socket");
 	}
-	pthread_t sniffer_thread[4];
+
 	/* Run until cancelled */
-	while (sockCount<4) {
-		unsigned int clientlen = sizeof(echoclient);
-		/* Wait for client connection */
-		if ((clientsock = accept(serversock, (struct sockaddr *) &echoclient,&clientlen)) < 0) {
-			Die("Failed to accept client connection");
-			break;
+	while(1){
+		pthread_t sniffer_thread[4];
+		sockCount=0;
+		while (sockCount<4) {
+			unsigned int clientlen = sizeof(echoclient);
+			/* Wait for client connection */
+			if ((clientsock = accept(serversock, (struct sockaddr *) &echoclient,&clientlen)) < 0) {
+				Die("Failed to accept client connection");
+				break;
+			}
+			new_sock = malloc(1);
+			*new_sock = clientsock;
+			if(sockCount==0){
+				if(pthread_create( &sniffer_thread[sockCount++] , NULL ,  handlerTasks , (void*) new_sock) < 0){
+					perror("could not create thread");
+			    		return 1;
+				}
+			}else if(sockCount==1){
+				if(pthread_create( &sniffer_thread[sockCount++] , NULL ,  handlerCPU , (void*) new_sock) < 0){
+					perror("could not create thread");
+			    		return 1;
+				}
+			}else if(sockCount==2){
+				if(pthread_create( &sniffer_thread[sockCount++] , NULL ,  handlerMem , (void*) new_sock) < 0){
+					perror("could not create thread");
+			    		return 1;
+				}
+			}else if(sockCount==3){
+				if(pthread_create( &sniffer_thread[sockCount++] , NULL ,  handlerRun , (void*) new_sock) < 0){
+					perror("could not create thread");
+			    		return 1;
+				}
+			}
+			//pthread_join( sniffer_thread , NULL);
+			fprintf(stdout, "Client connected: %s\n",inet_ntoa(echoclient.sin_addr));
+			//HandleClient(clientsock);
 		}
-		new_sock = malloc(1);
-		*new_sock = clientsock;
-		if(sockCount==0){
-			if(pthread_create( &sniffer_thread[sockCount++] , NULL ,  handlerTasks , (void*) new_sock) < 0){
-				perror("could not create thread");
-		    		return 1;
-			}
-		}else if(sockCount==1){
-			if(pthread_create( &sniffer_thread[sockCount++] , NULL ,  handlerCPU , (void*) new_sock) < 0){
-				perror("could not create thread");
-		    		return 1;
-			}
-		}else if(sockCount==2){
-			if(pthread_create( &sniffer_thread[sockCount++] , NULL ,  handlerMem , (void*) new_sock) < 0){
-				perror("could not create thread");
-		    		return 1;
-			}
-		}else if(sockCount==3){
-			if(pthread_create( &sniffer_thread[sockCount++] , NULL ,  handlerRun , (void*) new_sock) < 0){
-				perror("could not create thread");
-		    		return 1;
-			}
-		}
-		//pthread_join( sniffer_thread , NULL);
-		fprintf(stdout, "Client connected: %s\n",inet_ntoa(echoclient.sin_addr));
-		//HandleClient(clientsock);
+		pthread_join( sniffer_thread[0] , NULL);
+		pthread_join( sniffer_thread[1] , NULL);
+		pthread_join( sniffer_thread[2] , NULL);
+		pthread_join( sniffer_thread[3] , NULL);
+		sleep(1);
 	}
-	pthread_join( sniffer_thread[0] , NULL);
-	pthread_join( sniffer_thread[1] , NULL);
-	pthread_join( sniffer_thread[2] , NULL);
-	pthread_join( sniffer_thread[3] , NULL);
 
 }
