@@ -29,11 +29,11 @@ Dependencies
 **Before proceeding, make sure everything is up to date. [ Run apt-get update ]**
 
 Gtk3.0+ [ version 3.10.8-0ubuntu1.6 ] : For UI elements and providing look and feel to the project.  
-Installation : 
+Installation :  
 	apt-get install libgtk-3-0
 
 Cairo [ version 1.13.0 ] : For 2D drawings, i.e., graphs.  
-Installation : 
+Installation :  
 	apt-get install libcairo2-dev
 
 
