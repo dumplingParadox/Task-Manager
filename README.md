@@ -1,8 +1,6 @@
-===================
 *******************
 **REMOTE TASK MANAGER**
 *******************
-===================
 
 
 ============
@@ -16,12 +14,12 @@ A windows look alike Task Manager for Ubuntu based Systems, having a host side a
 Main Features
 =============
 
-Complete information about the tasks of current user.  
-Graphical representation of past usage.  
-Killing tasks with just click.  
-Running new tasks.  
-Parallel connections for better performance.  
-Modern UI.
+* Complete information about the tasks of current user.  
+* Graphical representation of past usage.  
+* Killing tasks with just click.  
+* Running new tasks.  
+* Parallel connections for better performance.  
+* Modern UI.
 
 
 ============
@@ -31,10 +29,12 @@ Dependencies
 **Before proceeding, make sure everything is up to date. [ Run apt-get update ]**
 
 Gtk3.0+ [ version 3.10.8-0ubuntu1.6 ] : For UI elements and providing look and feel to the project.  
-Installation : apt-get install libgtk-3-0
+Installation : 
+	apt-get install libgtk-3-0
 
 Cairo [ version 1.13.0 ] : For 2D drawings, i.e., graphs.  
-Installation : apt-get install libcairo2-dev
+Installation : 
+	apt-get install libcairo2-dev
 
 
 ========
