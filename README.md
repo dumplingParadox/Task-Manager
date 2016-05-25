@@ -1,6 +1,8 @@
+===================
 *******************
-REMOTE TASK MANAGER
+**REMOTE TASK MANAGER**
 *******************
+===================
 
 
 ============
@@ -14,11 +16,11 @@ A windows look alike Task Manager for Ubuntu based Systems, having a host side a
 Main Features
 =============
 
-Complete information about the tasks of current user.
-Graphical representation of past usage.
-Killing tasks with just click.
-Running new tasks.
-Parallel connections for better performance.
+Complete information about the tasks of current user.  
+Graphical representation of past usage.  
+Killing tasks with just click.  
+Running new tasks.  
+Parallel connections for better performance.  
 Modern UI.
 
 
@@ -28,10 +30,10 @@ Dependencies
 
 **Before proceeding, make sure everything is up to date. [ Run apt-get update ]**
 
-Gtk3.0+ [ version 3.10.8-0ubuntu1.6 ] : For UI elements and providing look and feel to the project.
+Gtk3.0+ [ version 3.10.8-0ubuntu1.6 ] : For UI elements and providing look and feel to the project.  
 Installation : apt-get install libgtk-3-0
 
-Cairo [ version 1.13.0 ] : For 2D drawings, i.e., graphs.
+Cairo [ version 1.13.0 ] : For 2D drawings, i.e., graphs.  
 Installation : apt-get install libcairo2-dev
 
 
@@ -41,9 +43,9 @@ Download
 
 **Git dependencies must be resolved for the below function.**
 
-To download the project, simply clone it to your current directory.
+To download the project, simply clone it to your current directory.  
 
-Command :
+Command :  
 	git clone https://github.com/dumplingparadox/Task-Manager.git
 
 
@@ -69,7 +71,7 @@ To Run :
 	Task Manager Host Side :
 		./Task-Manager-Host
 
-After starting the Task Manager, with Host running on the remote Ubuntu system, enter the system ip [Use ifconfig to get system ip] and port for the Host as 8796 to connect to the remote system.
+After starting the Task Manager, with Host running on the remote Ubuntu system, enter the system ip [Use ifconfig to get system ip] and port for the Host as **8796** to connect to the remote system.
 
 ==========
 Known Bugs
@@ -87,9 +89,9 @@ Known Bugs
 Authors
 =======
 
-Shivam Vijay
-Lakshay Gupta
-Kamini Pandey
+Shivam Vijay  
+Lakshay Gupta  
+Kamini Pandey  
 
 =======
 Licence
