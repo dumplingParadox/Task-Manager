@@ -66,10 +66,10 @@ To Compile :
 To Run :
 
 	Task Manager Client Side:
-		`./Task-Manager`
+		./Task-Manager
 
 	Task Manager Host Side :
-		`./Task-Manager-Host`
+		./Task-Manager-Host
 
 After starting the Task Manager, with Host running on the remote Ubuntu system, enter the system ip [Use ifconfig to get system ip] and port for the Host as **8796** to connect to the remote system.
 
