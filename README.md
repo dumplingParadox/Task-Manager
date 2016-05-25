@@ -26,7 +26,7 @@ Main Features
 Dependencies
 ============
 
-**Before proceeding, make sure everything is up to date. [ `Run apt-get update` ]**
+**Before proceeding, make sure everything is up to date. [ Run `apt-get update` ]**
 
 Gtk3.0+ [ version 3.10.8-0ubuntu1.6 ] : For UI elements and providing look and feel to the project.  
 Installation :  
@@ -58,10 +58,10 @@ After resolving the dependencies, if any, either recompile the code files, or ru
 To Compile :
 
 	Task Manager Client Side:
-		`gcc Task-Manager.c -o Task-Manager `` `pkg-config --cflags --libs gtk+-3.0 gthread-2.0`` ` -w`
+		gcc Task-Manager.c -o Task-Manager `pkg-config --cflags --libs gtk+-3.0 gthread-2.0` -w
 
 	Task Manager Host Side :
-		`gcc Task-Manager-Host.c -o Task-Manager-Host -pthread -w`
+		gcc Task-Manager-Host.c -o Task-Manager-Host -pthread -w
 
 To Run :
 
