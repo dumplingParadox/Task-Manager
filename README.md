@@ -26,15 +26,15 @@ Main Features
 Dependencies
 ============
 
-**Before proceeding, make sure everything is up to date. [ Run apt-get update ]**
+**Before proceeding, make sure everything is up to date. [ `Run apt-get update` ]**
 
 Gtk3.0+ [ version 3.10.8-0ubuntu1.6 ] : For UI elements and providing look and feel to the project.  
 Installation :  
-	apt-get install libgtk-3-0
+	`apt-get install libgtk-3-0`
 
 Cairo [ version 1.13.0 ] : For 2D drawings, i.e., graphs.  
 Installation :  
-	apt-get install libcairo2-dev
+	`apt-get install libcairo2-dev`
 
 
 ========
@@ -46,7 +46,7 @@ Download
 To download the project, simply clone it to your current directory.  
 
 Command :  
-	git clone https://github.com/dumplingparadox/Task-Manager.git
+	`git clone https://github.com/dumplingparadox/Task-Manager.git`
 
 
 ===================
@@ -58,18 +58,18 @@ After resolving the dependencies, if any, either recompile the code files, or ru
 To Compile :
 
 	Task Manager Client Side:
-		gcc Task-Manager.c -o Task-Manager `pkg-config --cflags --libs gtk+-3.0 gthread-2.0` -w
+		`gcc Task-Manager.c -o Task-Manager `` `pkg-config --cflags --libs gtk+-3.0 gthread-2.0`` ` -w`
 
 	Task Manager Host Side :
-		gcc Task-Manager-Host.c -o Task-Manager-Host -pthread -w
+		`gcc Task-Manager-Host.c -o Task-Manager-Host -pthread -w`
 
 To Run :
 
 	Task Manager Client Side:
-		./Task-Manager
+		`./Task-Manager`
 
 	Task Manager Host Side :
-		./Task-Manager-Host
+		`./Task-Manager-Host`
 
 After starting the Task Manager, with Host running on the remote Ubuntu system, enter the system ip [Use ifconfig to get system ip] and port for the Host as **8796** to connect to the remote system.
 
