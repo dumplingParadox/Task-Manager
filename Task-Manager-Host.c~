@@ -13,8 +13,6 @@
 	Run :
 		./Task-Manager-Host
 
-**/
-
 #define MAXPENDING 5    /* Max connection requests */
           
 void Die(char *mess) { perror(mess); return; }

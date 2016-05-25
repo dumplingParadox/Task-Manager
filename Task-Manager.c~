@@ -6,8 +6,6 @@
 	Run :
 		./Task-Manager
 
-	DEFAULT PORT FOR HOST : 8796
-
 **/
 
 #include<gtk/gtk.h>
